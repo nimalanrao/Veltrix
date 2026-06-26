@@ -15,6 +15,41 @@ function App() {
   const scrollPercentRef = useRef(null);
 
   useEffect(() => {
+    // Visitor Tracking & Discord Notification
+    const trackVisit = async () => {
+      // Prevent multiple counts in the same session
+      if (sessionStorage.getItem('veltrix_visited')) return;
+      sessionStorage.setItem('veltrix_visited', 'true');
+
+      try {
+        let countText = '';
+        try {
+          // Use a free counter API to get view count
+          const res = await fetch('https://api.counterapi.dev/v1/nimalanrao-veltrix/visits/up');
+          const data = await res.json();
+          if (data && data.count) {
+            countText = `\n\n**Total Views:** ${data.count}`;
+          }
+        } catch (e) {
+          // Ignore counter failure
+        }
+
+        const webhookUrl = 'https://discord.com/api/webhooks/1505162869250064446/AQAKKLck5bRJIg4dKGbUgEhSD8QhMU0YTvQnkDymp5Yg6mQ7Kp0P3RgiBVXnBKbR9A7V';
+        await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: `🚀 **New Visitor!** Someone just landed on Veltrix.${countText}`,
+            username: 'Veltrix Tracker',
+            avatar_url: 'https://github.com/nimalanrao.png'
+          })
+        });
+      } catch (err) {
+        console.error('Failed to notify Discord', err);
+      }
+    };
+    trackVisit();
+
     // Parallax decorative orbs scroll effect
     const handleOrbsParallax = (scrollY) => {
       const orbs = document.querySelectorAll('.parallax-orb');
