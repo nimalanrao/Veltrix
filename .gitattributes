@@ -1,0 +1,4 @@
+# Exclude agent files and skills from GitHub language statistics
+.agents/** linguist-vendored
+agent/** linguist-vendored
+skills-lock.json linguist-vendored
