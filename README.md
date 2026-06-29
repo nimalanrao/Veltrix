@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./public/favicon.svg" alt="Veltrix Logo" width="80" height="80" style="margin-bottom: 20px;" />
+  <img src="src/assets/Veltrix text logo.svg" alt="Veltrix Logo" width="80" height="80" style="margin-bottom: 20px;" />
   
   # Veltrix
   
