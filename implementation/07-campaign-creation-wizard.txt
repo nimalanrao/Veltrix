@@ -1,0 +1,448 @@
+CAMPAIGN CREATION WIZARD
+=========================
+
+Route: /dashboard/campaigns/new
+File: src/pages/dashboard/CampaignNew.tsx
+
+A 5-step guided wizard for creating campaigns, matching the 
+Register.tsx step-by-step UX pattern. Integrates Gemini for
+AI copy generation and image generation.
+
+
+============================================================
+1. WIZARD STRUCTURE
+============================================================
+
+  Step 1: Campaign Basics      — name, objective, channel
+  Step 2: Audience Targeting   — persona, age, location, interests
+  Step 3: AI Copy Generation   — product info, tone, Gemini generates copy + image
+  Step 4: Budget & Schedule    — daily budget, total budget, dates, bid strategy
+  Step 5: Review & Launch      — summary, ad preview, launch or save as draft
+
+Navigation:
+  - Progress bar at top (5 segments, fills as user progresses)
+  - "Step X of 5" label
+  - Back / Continue buttons at bottom
+  - Each step slides in from right (AnimatePresence, matching Register.tsx)
+  - Form data persisted in useState across steps (single parent state object)
+
+
+============================================================
+2. FORM STATE
+============================================================
+
+const [formData, setFormData] = useState({
+  // Step 1: Basics
+  name: "",
+  objective: "",           // 'awareness' | 'leads' | 'conversions' | 'traffic'
+  channel: "",             // 'meta' | 'google' | 'x' | 'email'
+
+  // Step 2: Audience
+  audienceType: "persona", // 'persona' | 'custom'
+  audiencePersonaId: null, // UUID of selected persona
+  audienceCustom: "",      // free-text if custom
+  targetAgeMin: 18,
+  targetAgeMax: 65,
+  targetLocation: "",
+  targetInterests: [],     // string array
+
+  // Step 3: AI Copy
+  productName: "",
+  productDescription: "",
+  tone: "",                // 'bold' | 'witty' | 'professional' | 'inspiring'
+  generatedHeadline: "",
+  generatedBody: "",
+  generatedCta: "",
+  generatedImageUrl: "",   // Supabase Storage URL
+  generatedImageBase64: "",// for local preview before save
+  predictedCtr: null,
+  predictedCpa: null,
+  aiConfidenceScore: null,
+
+  // Step 4: Budget
+  dailyBudget: "",
+  totalBudget: "",
+  startDate: "",
+  endDate: "",
+  runContinuously: false,
+  bidStrategy: "lowest_cost",
+});
+
+
+============================================================
+3. STEP 1 — CAMPAIGN BASICS
+============================================================
+
+  ┌──────────────────────────────────┐
+  │  █████░░░░░░░░░░░░░░  Step 1/5  │
+  │                                  │
+  │  What are you building?          │
+  │  Let's set up the foundation.    │
+  │                                  │
+  │  Campaign Name                   │
+  │  ┌────────────────────────────┐  │
+  │  │ e.g. FitTrack Pro Launch  │  │
+  │  └────────────────────────────┘  │
+  │                                  │
+  │  Campaign Objective              │
+  │  ┌──────────┐ ┌──────────┐      │
+  │  │ 🎯       │ │ 👥       │      │
+  │  │ Brand    │ │ Lead     │      │
+  │  │ Awareness│ │ Gen      │      │
+  │  └──────────┘ └──────────┘      │
+  │  ┌──────────┐ ┌──────────┐      │
+  │  │ 💰       │ │ 🚀       │      │
+  │  │ Convert- │ │ Traffic  │      │
+  │  │ sions    │ │          │      │
+  │  └──────────┘ └──────────┘      │
+  │                                  │
+  │  Marketing Channel               │
+  │  ┌──────────┐ ┌──────────┐      │
+  │  │ 📱 Meta  │ │ 🔍 Google│      │
+  │  └──────────┘ └──────────┘      │
+  │  ┌──────────┐ ┌──────────┐      │
+  │  │ 𝕏 X     │ │ ✉ Email  │      │
+  │  └──────────┘ └──────────┘      │
+  │                                  │
+  │            [Back]  [Continue →]  │
+  └──────────────────────────────────┘
+
+  Objective cards:
+    - 2x2 grid, clickable
+    - Selected: bg-slate-900 text-white border-slate-800
+    - Unselected: bg-white border-slate-200 hover:border-slate-300
+
+  Channel cards:
+    - Same 2x2 grid pattern
+    - Each has an icon and label
+    - Only one selectable at a time
+
+  Validation: all three fields required before Continue
+
+
+============================================================
+4. STEP 2 — AUDIENCE TARGETING
+============================================================
+
+  ┌──────────────────────────────────┐
+  │  ██████████░░░░░░░░░  Step 2/5  │
+  │                                  │
+  │  Who are you targeting?          │
+  │  Select a persona or describe    │
+  │  your audience.                  │
+  │                                  │
+  │  [Use Saved Persona] [Custom]    │
+  │                                  │
+  │  ── If Persona ──                │
+  │  ┌──────────────────────────┐   │
+  │  │ ○ Tech Founders          │   │
+  │  │ ○ E-commerce Shoppers    │   │
+  │  │ ○ Fitness Enthusiasts    │   │
+  │  │ [+ Create New Persona]   │   │
+  │  └──────────────────────────┘   │
+  │                                  │
+  │  ── If Custom ──                 │
+  │  ┌────────────────────────────┐  │
+  │  │ Describe your audience... │  │
+  │  └────────────────────────────┘  │
+  │                                  │
+  │  Age Range                       │
+  │  [18] ────●────────── [65]      │
+  │                                  │
+  │  Location                        │
+  │  ┌────────────────────────────┐  │
+  │  │ e.g. Malaysia, Singapore  │  │
+  │  └────────────────────────────┘  │
+  │                                  │
+  │  Interests (tags)                │
+  │  [SaaS] [AI] [Startups] [+]     │
+  │                                  │
+  │            [Back]  [Continue →]  │
+  └──────────────────────────────────┘
+
+  Persona list:
+    - Loaded from usePersonas() hook → audience_personas table
+    - Radio-style selection
+    - "+ Create New Persona" opens inline Gemini persona generator
+
+  Custom audience:
+    - Textarea for free-text description
+    - This text is sent to Gemini as the audience parameter
+
+  Interest tags:
+    - Chip/pill style inputs
+    - Click [+] to add new tag
+    - Click × on tag to remove
+    - Pre-populated suggestions based on selected persona
+
+
+============================================================
+5. STEP 3 — AI COPY GENERATION (THE STAR FEATURE)
+============================================================
+
+This is where Gemini integration shines.
+
+  ┌──────────────────────────────────────────┐
+  │  ████████████████░░░░░░░  Step 3/5      │
+  │                                          │
+  │  Let AI write your ad                    │
+  │  Tell us about your product and we'll    │
+  │  generate high-converting copy.          │
+  │                                          │
+  │  Product Name                            │
+  │  ┌────────────────────────────────────┐  │
+  │  │ FitTrack Pro                      │  │
+  │  └────────────────────────────────────┘  │
+  │                                          │
+  │  Product Description & Hooks             │
+  │  ┌────────────────────────────────────┐  │
+  │  │ AI-powered smart fitness ring     │  │
+  │  │ that automatically tracks reps,   │  │
+  │  │ sleep stages, and calorie burn.   │  │
+  │  └────────────────────────────────────┘  │
+  │                                          │
+  │  Tone                                    │
+  │  [🔥 Bold] [😏 Witty] [👔 Pro] [✨ Inspiring]
+  │                                          │
+  │  ┌──────────────────────────────────┐   │
+  │  │  [✨ Generate Ad Copy with AI]  │   │
+  │  └──────────────────────────────────┘   │
+  │                                          │
+  │  ── AFTER GENERATION ──                  │
+  │                                          │
+  │  ┌──────────────────────────────────┐   │
+  │  │  ✅ Copy Generated               │   │
+  │  │                                    │   │
+  │  │  HEADLINE:                        │   │
+  │  │  🔥 Stop scrolling. FitTrack Pro  │   │
+  │  │  just changed the game.           │   │
+  │  │                                    │   │
+  │  │  BODY:                            │   │
+  │  │  Track every rep. Optimize every  │   │
+  │  │  night. The smartest fitness ring  │   │
+  │  │  ever built — now with AI.        │   │
+  │  │                                    │   │
+  │  │  CTA: Get Yours Now →            │   │
+  │  │                                    │   │
+  │  │  Predicted CTR: 3.8%             │   │
+  │  │  Predicted CPA: MYR 4.20        │   │
+  │  │  AI Confidence: 88/100          │   │
+  │  │                                    │   │
+  │  │  [🔄 Regenerate] [✏️ Edit]       │   │
+  │  └──────────────────────────────────┘   │
+  │                                          │
+  │  ┌──────────────────────────────────┐   │
+  │  │  [🖼️ Generate Ad Image with AI] │   │
+  │  └──────────────────────────────────┘   │
+  │                                          │
+  │  ── AFTER IMAGE GENERATION ──            │
+  │                                          │
+  │  ┌──────────────────────────────────┐   │
+  │  │  [Generated ad creative image]   │   │
+  │  │                                    │   │
+  │  │  [🔄 Regenerate] [Remove]        │   │
+  │  └──────────────────────────────────┘   │
+  │                                          │
+  │              [Back]  [Continue →]        │
+  └──────────────────────────────────────────┘
+
+
+5.1 GENERATE AD COPY FLOW
+---------------------------
+
+When user clicks "Generate Ad Copy with AI":
+
+  1. Validate product name and description are filled
+  2. Set loading state → show spinner with "Generating your ad copy..."
+  3. Call useGemini().generateAdCopy({
+       productName,
+       productDescription,
+       channel: formData.channel,
+       tone: formData.tone,
+       audience: selectedPersona?.name || formData.audienceCustom,
+       targetAgeRange: `${formData.targetAgeMin}-${formData.targetAgeMax}`,
+       objective: formData.objective,
+     })
+  4. On success:
+     - Populate generatedHeadline, generatedBody, generatedCta
+     - Show predicted CTR, CPA, confidence score
+     - Show success animation (green checkmark fade-in)
+  5. On error:
+     - Show error message below button
+     - "AI generation failed. Try again or write your copy manually."
+
+  "Regenerate" button:
+    - Same flow, replaces existing copy
+    - Small confirmation: "This will replace your current copy"
+
+  "Edit" toggle:
+    - Switches headline/body/cta from read-only to editable inputs
+    - User can manually tweak the AI-generated copy
+
+
+5.2 GENERATE AD IMAGE FLOW
+-----------------------------
+
+When user clicks "Generate Ad Image with AI":
+
+  1. Set loading state → show spinner with "Creating your ad creative..."
+  2. Call useGemini().generateAdImage({
+       productName: formData.productName,
+       productDescription: formData.productDescription,
+       channel: formData.channel,
+       style: "vibrant",  // default, could add style picker
+     })
+  3. On success:
+     - Show generated image preview (base64 for instant display)
+     - Upload to Supabase Storage in background
+     - Save public URL to formData.generatedImageUrl
+  4. On error:
+     - Show error: "Image generation failed. You can continue without an image."
+     - Image is optional — user can still create the campaign
+
+  "Regenerate" button:
+    - Generates a new image, replaces the old one
+    - Deletes the old image from Supabase Storage
+
+  "Remove" button:
+    - Clears the image, deletes from storage
+
+
+============================================================
+6. STEP 4 — BUDGET & SCHEDULE
+============================================================
+
+  ┌──────────────────────────────────┐
+  │  █████████████████████░░ Step 4  │
+  │                                  │
+  │  Set your budget                 │
+  │  Control how much you spend.     │
+  │                                  │
+  │  Daily Budget (MYR)              │
+  │  ┌────────────────────────────┐  │
+  │  │ 50.00                     │  │
+  │  └────────────────────────────┘  │
+  │                                  │
+  │  Total Budget Cap (MYR)          │
+  │  ┌────────────────────────────┐  │
+  │  │ 1,500.00                  │  │
+  │  └────────────────────────────┘  │
+  │                                  │
+  │  Start Date                      │
+  │  ┌────────────────────────────┐  │
+  │  │ 📅 Jul 1, 2026           │  │
+  │  └────────────────────────────┘  │
+  │                                  │
+  │  End Date                        │
+  │  ☐ Run continuously (no end)     │
+  │  ┌────────────────────────────┐  │
+  │  │ 📅 Sep 30, 2026          │  │
+  │  └────────────────────────────┘  │
+  │                                  │
+  │  Bid Strategy                    │
+  │  ┌──────────┐ ┌──────────┐      │
+  │  │ Lowest   │ │ Target   │      │
+  │  │ Cost ●   │ │ CPA      │      │
+  │  └──────────┘ └──────────┘      │
+  │  ┌──────────┐                    │
+  │  │ Target   │                    │
+  │  │ ROAS     │                    │
+  │  └──────────┘                    │
+  │                                  │
+  │  Estimated Duration: 30 days     │
+  │  Estimated Daily Reach: ~1,200   │
+  │                                  │
+  │            [Back]  [Continue →]  │
+  └──────────────────────────────────┘
+
+  - Budget inputs: number type, formatted with commas
+  - Date inputs: native date picker or custom date picker component
+  - "Run continuously" checkbox disables end date input
+  - Bid strategy: card-style selection (same as objective)
+  - Calculated estimates shown at bottom:
+    - Duration: (endDate - startDate) in days
+    - Daily Reach: rough estimate based on budget + channel benchmarks
+
+
+============================================================
+7. STEP 5 — REVIEW & LAUNCH
+============================================================
+
+  ┌──────────────────────────────────────────┐
+  │  █████████████████████████  Step 5/5    │
+  │                                          │
+  │  Review your campaign                    │
+  │  Everything looks good? Launch it.       │
+  │                                          │
+  │  ┌──────────────────────────────────┐   │
+  │  │  CAMPAIGN SUMMARY               │   │
+  │  │                                    │   │
+  │  │  Name: FitTrack Pro Launch        │   │
+  │  │  Objective: Conversions           │   │
+  │  │  Channel: Meta Sponsored Ad       │   │
+  │  │  Audience: Fitness Enthusiasts    │   │
+  │  │  Tone: Urgent & Bold             │   │
+  │  │  Budget: MYR 50/day, MYR 1,500   │   │
+  │  │  Schedule: Jul 1 – Sep 30, 2026  │   │
+  │  │  Bid: Lowest Cost                │   │
+  │  └──────────────────────────────────┘   │
+  │                                          │
+  │  ┌──────────────────────────────────┐   │
+  │  │  AD PREVIEW (channel-specific)   │   │
+  │  │                                    │   │
+  │  │  ┌────────────────────────────┐  │   │
+  │  │  │ [Generated Image]         │  │   │
+  │  │  │                            │  │   │
+  │  │  │ 🔥 Stop scrolling...      │  │   │
+  │  │  │ Track every rep...        │  │   │
+  │  │  │ [Get Yours Now →]         │  │   │
+  │  │  │ Sponsored · veltrix.com   │  │   │
+  │  │  └────────────────────────────┘  │   │
+  │  └──────────────────────────────────┘   │
+  │                                          │
+  │  ┌──────────────────────────────────┐   │
+  │  │  AI PREDICTIONS                  │   │
+  │  │  CTR: 3.8%  CPA: MYR 4.20      │   │
+  │  │  Confidence: 88/100             │   │
+  │  └──────────────────────────────────┘   │
+  │                                          │
+  │  [Save as Draft]    [🚀 Launch Campaign] │
+  └──────────────────────────────────────────┘
+
+  "Save as Draft":
+    - Creates campaign with status: 'draft'
+    - Redirects to /dashboard/campaigns
+    - Toast: "Campaign saved as draft"
+
+  "Launch Campaign":
+    - Creates campaign with status: 'active'
+    - Redirects to /dashboard/campaigns/:id (the new campaign's detail page)
+    - Toast: "Campaign launched! 🚀"
+    - Activity log entries auto-created by database triggers
+
+  Both buttons call useCampaigns().createCampaign() with the full formData.
+
+
+============================================================
+8. WIZARD ANIMATION
+============================================================
+
+Each step uses the same animation pattern as Register.tsx:
+
+  <AnimatePresence mode="wait">
+    {step === N && (
+      <motion.div
+        key={`step${N}`}
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -20 }}
+        transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+      >
+        {/* Step content */}
+      </motion.div>
+    )}
+  </AnimatePresence>
+
+Progress bar animation:
+  - Each segment transitions color with a 200ms delay
+  - Uses Tailwind transition-colors duration-300

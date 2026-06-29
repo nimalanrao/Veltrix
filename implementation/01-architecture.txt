@@ -1,0 +1,208 @@
+SYSTEM ARCHITECTURE
+====================
+
+1. OVERALL STACK
+-----------------
+
+Frontend:     Vite + React 19 + TypeScript
+Styling:      Tailwind CSS 3.4
+Animation:    Motion (framer-motion successor)
+Icons:        lucide-react
+Routing:      react-router-dom v7
+Backend:      Supabase (Auth + Postgres + Realtime + Storage)
+AI:           Google Gemini API (text generation + image generation)
+Fonts:        Instrument Serif (headings), Barlow (body)
+Scroll:       Lenis (smooth scroll on landing page only)
+
+
+2. ROUTING ARCHITECTURE
+------------------------
+
+The app has two distinct zones:
+
+  PUBLIC ZONE (no auth required):
+    /                    → Landing page (Home.tsx)
+    /login               → Login page
+    /register            → 5-step registration wizard
+
+  DASHBOARD ZONE (auth required, wrapped in AuthGuard):
+    /dashboard           → Overview (default)
+    /dashboard/campaigns → Campaign list
+    /dashboard/campaigns/new → Create campaign wizard
+    /dashboard/campaigns/:id → Campaign detail
+    /dashboard/audience  → Audience insights & personas
+    /dashboard/analytics → Cross-campaign analytics
+    /dashboard/integrations → Channel connections
+    /dashboard/settings  → Account & workspace settings
+
+Route structure in App.tsx:
+
+  <Router>
+    <ScrollToTop />
+    <AnimatePresence mode="wait">
+      <Routes>
+        {/* Public routes */}
+        <Route path="/" element={<PageTransition><Home /></PageTransition>} />
+        <Route path="/login" element={<PageTransition><Login /></PageTransition>} />
+        <Route path="/register" element={<PageTransition><Register /></PageTransition>} />
+
+        {/* Protected dashboard routes */}
+        <Route path="/dashboard" element={<AuthGuard><DashboardLayout /></AuthGuard>}>
+          <Route index element={<Overview />} />
+          <Route path="campaigns" element={<Campaigns />} />
+          <Route path="campaigns/new" element={<CampaignNew />} />
+          <Route path="campaigns/:id" element={<CampaignDetail />} />
+          <Route path="audience" element={<Audience />} />
+          <Route path="analytics" element={<Analytics />} />
+          <Route path="integrations" element={<Integrations />} />
+          <Route path="settings" element={<Settings />} />
+        </Route>
+      </Routes>
+    </AnimatePresence>
+  </Router>
+
+
+3. LAYOUT SYSTEM
+-----------------
+
+DashboardLayout.tsx renders:
+
+  ┌──────────────────────────────────────────────────────┐
+  │ SIDEBAR (w-64)       │  TOP BAR (sticky, h-16)      │
+  │ ┌──────────────────┐ │  ┌──────────────────────────┐ │
+  │ │ Logo (clickable  │ │  │ Breadcrumb / Page Title  │ │
+  │ │ → goes to /)     │ │  │                 [Search] │ │
+  │ │                  │ │  │            [User Avatar] │ │
+  │ │ ── Navigation ── │ │  └──────────────────────────┘ │
+  │ │                  │ │                               │
+  │ │ Overview      ●  │ │  ┌──────────────────────────┐ │
+  │ │ Campaigns        │ │  │                          │ │
+  │ │ Create Campaign  │ │  │  <Outlet />              │ │
+  │ │ Audience         │ │  │  (page content renders   │ │
+  │ │ Analytics        │ │  │   here, scrollable)      │ │
+  │ │ Integrations     │ │  │                          │ │
+  │ │                  │ │  │                          │ │
+  │ │ ── Account ───── │ │  │                          │ │
+  │ │ Settings         │ │  │                          │ │
+  │ │                  │ │  │                          │ │
+  │ │ ── Bottom ────── │ │  │                          │ │
+  │ │ Plan: Pro ✦      │ │  │                          │ │
+  │ │ [Log Out]        │ │  └──────────────────────────┘ │
+  │ └──────────────────┘ │                               │
+  └──────────────────────────────────────────────────────┘
+
+  - Sidebar is fixed on desktop (lg+), drawer on mobile
+  - Top bar is sticky within the main content area
+  - Main content area is the only scrollable zone
+  - <Outlet /> from react-router renders the active page
+
+
+4. FILE STRUCTURE (FINAL)
+--------------------------
+
+src/
+├── App.tsx                           # Router with public + dashboard routes
+├── main.tsx                          # Entry point
+├── index.css                         # Tailwind base + liquid-glass utilities
+│
+├── assets/
+│   ├── Veltrix logo.svg              # Star icon logo
+│   └── Veltrix text logo.svg         # Full wordmark
+│
+├── components/
+│   ├── BlurText.tsx                  # Animated text reveal (landing)
+│   ├── FAQ.tsx                       # Landing FAQ
+│   ├── Features.tsx                  # Landing feature cards
+│   ├── Footer.tsx                    # Landing footer
+│   ├── Hero.tsx                      # Landing hero
+│   ├── Navbar.tsx                    # Landing navbar
+│   ├── PageTransition.tsx            # Route transition wrapper
+│   ├── Playground.tsx                # Landing demo playground
+│   ├── Pricing.tsx                   # Landing pricing cards
+│   ├── ScrollToTop.tsx               # Scroll reset on navigate
+│   ├── Stats.tsx                     # Landing stat counters
+│   │
+│   └── dashboard/                    # ALL DASHBOARD COMPONENTS
+│       ├── DashboardLayout.tsx       # Shell: sidebar + topbar + <Outlet>
+│       ├── Sidebar.tsx               # Left navigation sidebar
+│       ├── TopBar.tsx                # Sticky top header bar
+│       ├── AuthGuard.tsx             # Auth protection wrapper
+│       ├── StatCard.tsx              # Reusable KPI metric card
+│       ├── CampaignCard.tsx          # Campaign card (grid view)
+│       ├── CampaignTable.tsx         # Campaign rows (table view)
+│       ├── PerformanceChart.tsx      # Area/line chart component
+│       ├── ChannelBadge.tsx          # Channel icon + label pill
+│       ├── StatusBadge.tsx           # Status pill (active/paused/etc)
+│       ├── EmptyState.tsx            # Empty state placeholder
+│       ├── WizardStep.tsx            # Wizard step wrapper with animation
+│       ├── AdPreview.tsx             # Channel-specific ad preview
+│       ├── AdImagePreview.tsx        # Gemini-generated image preview
+│       ├── PersonaCard.tsx           # Audience persona card
+│       ├── IntegrationCard.tsx       # Channel integration card
+│       ├── ActivityLog.tsx           # Timeline activity log
+│       ├── AIInsightPanel.tsx        # Gemini-generated insights panel
+│       └── LoadingSkeleton.tsx       # Skeleton loader for async content
+│
+├── hooks/
+│   ├── useAuth.ts                    # Auth state + session management
+│   ├── useProfile.ts                 # User profile read/update
+│   ├── useCampaigns.ts              # Campaign CRUD + list
+│   ├── useMetrics.ts                # Campaign metrics fetching
+│   └── useGemini.ts                 # Gemini API wrapper hook
+│
+├── lib/
+│   ├── supabase.ts                   # Supabase client (existing)
+│   ├── gemini.ts                     # Gemini API client + helpers
+│   └── utils.ts                      # Formatting (currency, dates, %)
+│
+└── pages/
+    ├── Home.tsx                       # Landing page (existing)
+    ├── Login.tsx                      # Login (existing)
+    ├── Register.tsx                   # Register (existing)
+    └── dashboard/
+        ├── Overview.tsx               # Dashboard home
+        ├── Campaigns.tsx              # Campaign list
+        ├── CampaignNew.tsx            # Create campaign wizard
+        ├── CampaignDetail.tsx         # Single campaign view
+        ├── Audience.tsx               # Audience personas
+        ├── Analytics.tsx              # Analytics dashboard
+        ├── Integrations.tsx           # Channel connections
+        └── Settings.tsx               # Account settings
+
+
+5. DATA FLOW
+-------------
+
+User Action → React Component → Custom Hook → Supabase Client → Postgres
+                                             → Gemini API → AI Response
+
+Example: Creating a campaign with AI copy:
+
+  1. User fills campaign form (CampaignNew.tsx)
+  2. Clicks "Generate with AI"
+  3. useGemini() hook calls lib/gemini.ts
+  4. gemini.ts sends prompt to Gemini API with product info + tone + channel
+  5. Gemini returns generated headline, body, CTA text
+  6. Also optionally generates an ad creative image via Gemini Imagen
+  7. User reviews, edits, clicks "Launch"
+  8. useCampaigns() hook calls supabase.from('campaigns').insert(...)
+  9. Campaign saved to Postgres with generated copy + image URL
+  10. Activity log entry created automatically
+  11. User redirected to campaign detail page
+
+
+6. ENVIRONMENT VARIABLES
+-------------------------
+
+.env file needs these additions:
+
+  VITE_SUPABASE_URL=https://xizdmnauryqncedenmob.supabase.co
+  VITE_SUPABASE_ANON_KEY=sb_publishable_...
+  VITE_GEMINI_API_KEY=your-gemini-api-key-here
+
+All accessed via import.meta.env.VITE_* in the frontend.
+
+IMPORTANT: The Gemini API key is exposed in the frontend bundle.
+For production, you would proxy through a Supabase Edge Function
+to keep the key server-side. For this MVP/demo, direct client-side
+calls are acceptable.

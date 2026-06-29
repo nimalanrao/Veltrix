@@ -1,0 +1,511 @@
+DATABASE SCHEMA (SUPABASE)
+===========================
+
+This file contains the complete SQL schema for all dashboard tables,
+RLS policies, triggers, indexes, and seed data.
+
+Run this in the Supabase SQL Editor (Dashboard → SQL Editor → New Query).
+
+
+============================================================
+PART 1: NEW TABLES
+============================================================
+
+-- -------------------------------------------------------
+-- 1. CAMPAIGNS
+-- The core table. Every marketing campaign lives here.
+-- -------------------------------------------------------
+CREATE TABLE public.campaigns (
+  id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id         UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+
+  -- Basic info
+  name            TEXT NOT NULL,
+  objective       TEXT NOT NULL,               -- 'awareness' | 'leads' | 'conversions' | 'traffic'
+  channel         TEXT NOT NULL,               -- 'meta' | 'google' | 'x' | 'email'
+  status          TEXT NOT NULL DEFAULT 'draft', -- 'draft' | 'active' | 'paused' | 'completed'
+
+  -- Audience targeting
+  audience_persona_id UUID REFERENCES public.audience_personas(id) ON DELETE SET NULL,
+  audience_custom TEXT,                        -- free-text audience description if not using a persona
+  target_age_min  INT DEFAULT 18,
+  target_age_max  INT DEFAULT 65,
+  target_location TEXT,
+  target_interests TEXT[],                     -- ['saas', 'ai', 'startups']
+
+  -- AI copy generation
+  tone            TEXT,                        -- 'bold' | 'witty' | 'professional' | 'inspiring'
+  product_name    TEXT,
+  product_description TEXT,
+  generated_headline TEXT,                     -- AI-generated headline
+  generated_body  TEXT,                        -- AI-generated ad body copy
+  generated_cta   TEXT,                        -- AI-generated CTA text
+  generated_image_url TEXT,                    -- URL to Gemini-generated ad image (stored in Supabase Storage)
+
+  -- Budget & schedule
+  daily_budget    DECIMAL(10,2),
+  total_budget    DECIMAL(10,2),
+  budget_spent    DECIMAL(10,2) DEFAULT 0,
+  bid_strategy    TEXT DEFAULT 'lowest_cost',  -- 'lowest_cost' | 'target_cpa' | 'target_roas'
+  start_date      DATE,
+  end_date        DATE,                        -- NULL = run continuously
+
+  -- AI predictions
+  ai_confidence_score INT,                     -- 0-100
+  predicted_ctr   DECIMAL(5,2),                -- e.g. 3.20 = 3.2%
+  predicted_cpa   DECIMAL(10,2),               -- e.g. 4.50
+
+  -- Timestamps
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for common queries
+CREATE INDEX idx_campaigns_user_id ON public.campaigns(user_id);
+CREATE INDEX idx_campaigns_status ON public.campaigns(status);
+CREATE INDEX idx_campaigns_channel ON public.campaigns(channel);
+CREATE INDEX idx_campaigns_created_at ON public.campaigns(created_at DESC);
+
+
+-- -------------------------------------------------------
+-- 2. CAMPAIGN METRICS (daily snapshots)
+-- One row per campaign per day. Powers all charts.
+-- -------------------------------------------------------
+CREATE TABLE public.campaign_metrics (
+  id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  campaign_id     UUID REFERENCES public.campaigns(id) ON DELETE CASCADE NOT NULL,
+  date            DATE NOT NULL,
+
+  -- Core metrics
+  impressions     INT DEFAULT 0,
+  clicks          INT DEFAULT 0,
+  conversions     INT DEFAULT 0,
+  spend           DECIMAL(10,2) DEFAULT 0,     -- actual spend that day
+  revenue         DECIMAL(10,2) DEFAULT 0,     -- attributed revenue that day
+
+  -- Calculated metrics (stored for fast reads)
+  ctr             DECIMAL(5,4) DEFAULT 0,      -- clicks / impressions
+  cpa             DECIMAL(10,2) DEFAULT 0,     -- spend / conversions
+  roas            DECIMAL(5,2) DEFAULT 0,      -- revenue / spend
+
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+
+  -- Prevent duplicate entries for same campaign+date
+  UNIQUE(campaign_id, date)
+);
+
+CREATE INDEX idx_metrics_campaign_date ON public.campaign_metrics(campaign_id, date DESC);
+
+
+-- -------------------------------------------------------
+-- 3. AUDIENCE PERSONAS
+-- Saved audience profiles, created manually or via Gemini AI.
+-- -------------------------------------------------------
+CREATE TABLE public.audience_personas (
+  id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id         UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+
+  name            TEXT NOT NULL,                -- e.g. "Tech Founders"
+  description     TEXT,                         -- detailed description
+  age_min         INT DEFAULT 18,
+  age_max         INT DEFAULT 65,
+  gender          TEXT DEFAULT 'all',           -- 'all' | 'male' | 'female' | 'other'
+  income_level    TEXT,                         -- 'low' | 'medium' | 'high' | 'any'
+  interests       TEXT[],                       -- ['saas', 'ai', 'venture capital']
+  pain_points     TEXT[],                       -- ['scaling', 'customer acquisition']
+  platforms       TEXT[],                       -- ['meta', 'google', 'x', 'email']
+  tone_recommendation TEXT,                     -- AI-recommended tone for this persona
+  ai_generated    BOOLEAN DEFAULT false,        -- true if Gemini created this
+
+  -- Usage tracking
+  campaigns_used_count INT DEFAULT 0,
+
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_personas_user_id ON public.audience_personas(user_id);
+
+
+-- -------------------------------------------------------
+-- 4. INTEGRATIONS
+-- Tracks connected ad platform accounts.
+-- -------------------------------------------------------
+CREATE TABLE public.integrations (
+  id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id         UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+
+  channel         TEXT NOT NULL,                -- 'meta' | 'google' | 'x' | 'email'
+  status          TEXT NOT NULL DEFAULT 'disconnected', -- 'connected' | 'disconnected' | 'error'
+  account_name    TEXT,                         -- display name e.g. "Veltrix Agency"
+  account_id      TEXT,                         -- platform-specific account ID
+  api_key_hash    TEXT,                         -- hashed API key (never store plaintext)
+  permissions     TEXT[],                       -- ['read', 'write', 'manage']
+  last_synced_at  TIMESTAMPTZ,
+  error_message   TEXT,                         -- if status = 'error', explain why
+
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW(),
+
+  -- One integration per channel per user
+  UNIQUE(user_id, channel)
+);
+
+CREATE INDEX idx_integrations_user_id ON public.integrations(user_id);
+
+
+-- -------------------------------------------------------
+-- 5. CAMPAIGN ACTIVITY LOG
+-- Chronological event stream for each campaign.
+-- -------------------------------------------------------
+CREATE TABLE public.campaign_activity (
+  id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  campaign_id     UUID REFERENCES public.campaigns(id) ON DELETE CASCADE NOT NULL,
+
+  event_type      TEXT NOT NULL,
+    -- Possible values:
+    -- 'created'          → campaign was created
+    -- 'launched'         → campaign went live
+    -- 'paused'           → campaign was paused
+    -- 'resumed'          → campaign was resumed
+    -- 'completed'        → campaign finished (end date reached or budget exhausted)
+    -- 'copy_generated'   → AI generated new ad copy
+    -- 'image_generated'  → AI generated ad creative image
+    -- 'copy_edited'      → user manually edited the copy
+    -- 'budget_changed'   → budget was modified
+    -- 'audience_changed' → audience targeting was changed
+    -- 'ab_test_started'  → A/B test was initiated
+    -- 'ab_test_result'   → A/B test concluded with winner
+    -- 'performance_alert'→ AI detected a performance anomaly
+
+  description     TEXT NOT NULL,               -- human-readable event description
+  metadata        JSONB,                       -- additional structured data
+
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_activity_campaign_id ON public.campaign_activity(campaign_id, created_at DESC);
+
+
+-- -------------------------------------------------------
+-- 6. GEMINI GENERATION LOG (optional, for tracking AI usage)
+-- -------------------------------------------------------
+CREATE TABLE public.gemini_log (
+  id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id         UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+
+  request_type    TEXT NOT NULL,                -- 'text' | 'image' | 'persona' | 'insight'
+  prompt          TEXT NOT NULL,                -- the prompt sent to Gemini
+  response_text   TEXT,                         -- text response (if text generation)
+  response_image_url TEXT,                      -- image URL (if image generation)
+  model_used      TEXT,                         -- 'gemini-2.5-flash' or 'gemini-2.5-pro'
+  tokens_used     INT,                          -- approximate token count
+  latency_ms      INT,                          -- response time in milliseconds
+  success         BOOLEAN DEFAULT true,
+
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_gemini_log_user_id ON public.gemini_log(user_id, created_at DESC);
+
+
+============================================================
+PART 2: ROW LEVEL SECURITY (RLS) POLICIES
+============================================================
+
+-- Enable RLS on all tables
+ALTER TABLE public.campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.campaign_metrics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audience_personas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.integrations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.campaign_activity ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.gemini_log ENABLE ROW LEVEL SECURITY;
+
+-- CAMPAIGNS: users can only CRUD their own
+CREATE POLICY "Users manage own campaigns"
+  ON public.campaigns FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- METRICS: users can read metrics for their own campaigns
+CREATE POLICY "Users read own campaign metrics"
+  ON public.campaign_metrics FOR SELECT
+  USING (
+    campaign_id IN (
+      SELECT id FROM public.campaigns WHERE user_id = auth.uid()
+    )
+  );
+
+-- METRICS: system can insert (used by seed data / edge functions)
+CREATE POLICY "Users insert own campaign metrics"
+  ON public.campaign_metrics FOR INSERT
+  WITH CHECK (
+    campaign_id IN (
+      SELECT id FROM public.campaigns WHERE user_id = auth.uid()
+    )
+  );
+
+-- PERSONAS: users manage own
+CREATE POLICY "Users manage own personas"
+  ON public.audience_personas FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- INTEGRATIONS: users manage own
+CREATE POLICY "Users manage own integrations"
+  ON public.integrations FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- ACTIVITY: users read activity for their own campaigns
+CREATE POLICY "Users read own campaign activity"
+  ON public.campaign_activity FOR SELECT
+  USING (
+    campaign_id IN (
+      SELECT id FROM public.campaigns WHERE user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users insert own campaign activity"
+  ON public.campaign_activity FOR INSERT
+  WITH CHECK (
+    campaign_id IN (
+      SELECT id FROM public.campaigns WHERE user_id = auth.uid()
+    )
+  );
+
+-- GEMINI LOG: users read own
+CREATE POLICY "Users read own gemini log"
+  ON public.gemini_log FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+
+============================================================
+PART 3: TRIGGERS & FUNCTIONS
+============================================================
+
+-- Auto-update the updated_at timestamp on campaigns
+CREATE OR REPLACE FUNCTION public.update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER campaigns_updated_at
+  BEFORE UPDATE ON public.campaigns
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
+
+CREATE TRIGGER personas_updated_at
+  BEFORE UPDATE ON public.audience_personas
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
+
+CREATE TRIGGER integrations_updated_at
+  BEFORE UPDATE ON public.integrations
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
+
+
+-- Auto-create activity log entry when campaign status changes
+CREATE OR REPLACE FUNCTION public.log_campaign_status_change()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.status IS DISTINCT FROM NEW.status THEN
+    INSERT INTO public.campaign_activity (campaign_id, event_type, description, metadata)
+    VALUES (
+      NEW.id,
+      CASE NEW.status
+        WHEN 'active' THEN 'launched'
+        WHEN 'paused' THEN 'paused'
+        WHEN 'completed' THEN 'completed'
+        ELSE 'status_changed'
+      END,
+      'Campaign status changed from ' || OLD.status || ' to ' || NEW.status,
+      jsonb_build_object('old_status', OLD.status, 'new_status', NEW.status)
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_campaign_status_change
+  AFTER UPDATE ON public.campaigns
+  FOR EACH ROW EXECUTE FUNCTION public.log_campaign_status_change();
+
+
+-- Auto-create activity log when campaign is first created
+CREATE OR REPLACE FUNCTION public.log_campaign_created()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.campaign_activity (campaign_id, event_type, description)
+  VALUES (NEW.id, 'created', 'Campaign "' || NEW.name || '" was created');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_campaign_created
+  AFTER INSERT ON public.campaigns
+  FOR EACH ROW EXECUTE FUNCTION public.log_campaign_created();
+
+
+============================================================
+PART 4: SEED DATA
+============================================================
+
+-- This seed data is inserted for the test user (test@gmail.com).
+-- Replace the user_id with the actual UUID from auth.users.
+
+-- To get the test user's ID:
+-- SELECT id FROM auth.users WHERE email = 'test@gmail.com';
+
+-- For the seed script, we'll use a variable approach:
+
+DO $$
+DECLARE
+  v_user_id UUID;
+  v_campaign_1 UUID := gen_random_uuid();
+  v_campaign_2 UUID := gen_random_uuid();
+  v_campaign_3 UUID := gen_random_uuid();
+  v_campaign_4 UUID := gen_random_uuid();
+  v_campaign_5 UUID := gen_random_uuid();
+  v_persona_1 UUID := gen_random_uuid();
+  v_persona_2 UUID := gen_random_uuid();
+  v_persona_3 UUID := gen_random_uuid();
+  v_day DATE;
+  v_base_impressions INT;
+  v_base_clicks INT;
+  v_base_conversions INT;
+  v_base_spend DECIMAL;
+  v_base_revenue DECIMAL;
+BEGIN
+  -- Get the test user ID
+  SELECT id INTO v_user_id FROM auth.users WHERE email = 'test@gmail.com' LIMIT 1;
+
+  IF v_user_id IS NULL THEN
+    RAISE NOTICE 'Test user not found. Skipping seed data.';
+    RETURN;
+  END IF;
+
+  -- ---- AUDIENCE PERSONAS ----
+  INSERT INTO public.audience_personas (id, user_id, name, description, age_min, age_max, gender, interests, platforms, tone_recommendation, ai_generated) VALUES
+  (v_persona_1, v_user_id, 'Tech Founders & Startups', 'Early-stage founders building SaaS products. Focused on growth hacking, product-market fit, and scaling. Active on Twitter/X and LinkedIn. Respond to data-driven messaging and social proof.', 25, 45, 'all', ARRAY['saas', 'artificial intelligence', 'startup funding', 'growth hacking', 'product management'], ARRAY['meta', 'x'], 'bold', true),
+  (v_persona_2, v_user_id, 'E-commerce Store Owners', 'Online store owners running Shopify/WooCommerce stores. Care about ROAS, conversion rates, and retargeting. Primarily advertise on Meta and Google Shopping.', 28, 55, 'all', ARRAY['ecommerce', 'shopify', 'dropshipping', 'digital marketing', 'facebook ads'], ARRAY['meta', 'google', 'email'], 'professional', true),
+  (v_persona_3, v_user_id, 'Fitness Enthusiasts', 'Health-conscious individuals interested in workout gear, supplements, and wellness apps. Highly visual audience — respond to aspirational imagery and transformation stories.', 18, 40, 'all', ARRAY['fitness', 'gym', 'nutrition', 'wellness', 'yoga'], ARRAY['meta', 'x'], 'inspiring', false);
+
+  -- ---- CAMPAIGNS ----
+  INSERT INTO public.campaigns (id, user_id, name, objective, channel, status, audience_persona_id, tone, product_name, product_description, generated_headline, generated_body, generated_cta, daily_budget, total_budget, budget_spent, bid_strategy, start_date, end_date, ai_confidence_score, predicted_ctr, predicted_cpa, created_at) VALUES
+  (v_campaign_1, v_user_id, 'FitTrack Pro Launch', 'conversions', 'meta', 'active', v_persona_3, 'bold', 'FitTrack Pro', 'AI-powered smart fitness ring that automatically tracks workout reps, sleep stages, and daily calorie burn with a sleek titanium body.', '🔥 Stop scrolling. FitTrack Pro just changed the game.', 'Track every rep. Optimize every night. The smartest fitness ring ever built — now with AI that learns your body.', 'Get Yours Now →', 50.00, 1500.00, 936.00, 'lowest_cost', '2026-06-01', '2026-07-15', 88, 3.80, 4.20, '2026-06-01 09:00:00+08'),
+
+  (v_campaign_2, v_user_id, 'SaaS Growth Campaign', 'leads', 'google', 'active', v_persona_1, 'professional', 'Veltrix Studio', 'Autonomous AI marketing platform that generates, deploys, and optimizes ad campaigns across Meta, Google, X, and Email.', 'AI Marketing That Runs Itself | Veltrix Studio', 'Generate high-converting ads in seconds. Deploy across channels with one click. Let AI optimize your bids 24/7. Start free.', 'Start Free Trial', 80.00, 2400.00, 1680.00, 'target_cpa', '2026-06-05', NULL, 92, 4.50, 3.10, '2026-06-05 14:00:00+08'),
+
+  (v_campaign_3, v_user_id, 'Summer Sale Email Blast', 'traffic', 'email', 'completed', v_persona_2, 'witty', 'ShopEase Store', 'Curated lifestyle products at unbeatable prices. Free shipping over MYR 99.', 'Your cart misses you 🛒 (and so do these deals)', 'Summer sale is HERE. Up to 60% off trending home, tech, and lifestyle picks. Your wallet will thank you. Probably.', 'Shop the Sale →', 25.00, 500.00, 500.00, 'lowest_cost', '2026-06-10', '2026-06-20', 76, 2.90, 6.50, '2026-06-10 10:00:00+08'),
+
+  (v_campaign_4, v_user_id, 'Brand Awareness — X Campaign', 'awareness', 'x', 'paused', v_persona_1, 'witty', 'Veltrix Studio', 'Autonomous AI marketing platform.', 'Your competitors are using AI to write ads. You''re still using a Google Doc. 💀', 'Veltrix Studio writes your ads, picks your audiences, optimizes your bids, and never asks for a raise. Autonomous marketing isn''t the future — it''s today.', 'Try Veltrix Free →', 30.00, 900.00, 312.00, 'lowest_cost', '2026-06-15', '2026-07-15', 71, 2.10, 8.90, '2026-06-15 16:00:00+08'),
+
+  (v_campaign_5, v_user_id, 'Q3 Retargeting Push', 'conversions', 'meta', 'draft', v_persona_2, 'professional', 'ShopEase Store', 'Premium lifestyle products. Fast shipping. Easy returns.', NULL, NULL, NULL, 40.00, 1200.00, 0, 'target_roas', '2026-07-01', '2026-09-30', NULL, NULL, NULL, '2026-06-28 11:00:00+08');
+
+  -- ---- CAMPAIGN METRICS (30 days for active campaigns) ----
+  -- Generate realistic daily metrics for campaign 1 (FitTrack Pro - Meta)
+  FOR v_day IN SELECT generate_series('2026-06-01'::date, '2026-06-29'::date, '1 day'::interval)::date
+  LOOP
+    v_base_impressions := 800 + floor(random() * 600)::int;
+    v_base_clicks := floor(v_base_impressions * (0.028 + random() * 0.025))::int;
+    v_base_conversions := floor(v_base_clicks * (0.06 + random() * 0.05))::int;
+    v_base_spend := 28 + random() * 44;
+    v_base_revenue := v_base_conversions * (35 + random() * 25);
+
+    INSERT INTO public.campaign_metrics (campaign_id, date, impressions, clicks, conversions, spend, revenue, ctr, cpa, roas)
+    VALUES (
+      v_campaign_1, v_day,
+      v_base_impressions, v_base_clicks, v_base_conversions,
+      round(v_base_spend::numeric, 2),
+      round(v_base_revenue::numeric, 2),
+      round((v_base_clicks::decimal / NULLIF(v_base_impressions, 0))::numeric, 4),
+      round((v_base_spend / NULLIF(v_base_conversions, 0))::numeric, 2),
+      round((v_base_revenue / NULLIF(v_base_spend, 0))::numeric, 2)
+    );
+  END LOOP;
+
+  -- Generate metrics for campaign 2 (SaaS Growth - Google)
+  FOR v_day IN SELECT generate_series('2026-06-05'::date, '2026-06-29'::date, '1 day'::interval)::date
+  LOOP
+    v_base_impressions := 1200 + floor(random() * 800)::int;
+    v_base_clicks := floor(v_base_impressions * (0.035 + random() * 0.03))::int;
+    v_base_conversions := floor(v_base_clicks * (0.08 + random() * 0.06))::int;
+    v_base_spend := 55 + random() * 50;
+    v_base_revenue := v_base_conversions * (45 + random() * 35);
+
+    INSERT INTO public.campaign_metrics (campaign_id, date, impressions, clicks, conversions, spend, revenue, ctr, cpa, roas)
+    VALUES (
+      v_campaign_2, v_day,
+      v_base_impressions, v_base_clicks, v_base_conversions,
+      round(v_base_spend::numeric, 2),
+      round(v_base_revenue::numeric, 2),
+      round((v_base_clicks::decimal / NULLIF(v_base_impressions, 0))::numeric, 4),
+      round((v_base_spend / NULLIF(v_base_conversions, 0))::numeric, 2),
+      round((v_base_revenue / NULLIF(v_base_spend, 0))::numeric, 2)
+    );
+  END LOOP;
+
+  -- Generate metrics for campaign 3 (Summer Sale - Email, completed)
+  FOR v_day IN SELECT generate_series('2026-06-10'::date, '2026-06-20'::date, '1 day'::interval)::date
+  LOOP
+    v_base_impressions := 2000 + floor(random() * 1000)::int;
+    v_base_clicks := floor(v_base_impressions * (0.02 + random() * 0.02))::int;
+    v_base_conversions := floor(v_base_clicks * (0.04 + random() * 0.04))::int;
+    v_base_spend := 40 + random() * 15;
+    v_base_revenue := v_base_conversions * (20 + random() * 15);
+
+    INSERT INTO public.campaign_metrics (campaign_id, date, impressions, clicks, conversions, spend, revenue, ctr, cpa, roas)
+    VALUES (
+      v_campaign_3, v_day,
+      v_base_impressions, v_base_clicks, v_base_conversions,
+      round(v_base_spend::numeric, 2),
+      round(v_base_revenue::numeric, 2),
+      round((v_base_clicks::decimal / NULLIF(v_base_impressions, 0))::numeric, 4),
+      round((v_base_spend / NULLIF(v_base_conversions, 0))::numeric, 2),
+      round((v_base_revenue / NULLIF(v_base_spend, 0))::numeric, 2)
+    );
+  END LOOP;
+
+  -- Generate metrics for campaign 4 (X Campaign, paused — only ran 10 days)
+  FOR v_day IN SELECT generate_series('2026-06-15'::date, '2026-06-25'::date, '1 day'::interval)::date
+  LOOP
+    v_base_impressions := 500 + floor(random() * 400)::int;
+    v_base_clicks := floor(v_base_impressions * (0.015 + random() * 0.015))::int;
+    v_base_conversions := floor(v_base_clicks * (0.03 + random() * 0.03))::int;
+    v_base_spend := 20 + random() * 20;
+    v_base_revenue := v_base_conversions * (25 + random() * 20);
+
+    INSERT INTO public.campaign_metrics (campaign_id, date, impressions, clicks, conversions, spend, revenue, ctr, cpa, roas)
+    VALUES (
+      v_campaign_4, v_day,
+      v_base_impressions, v_base_clicks, v_base_conversions,
+      round(v_base_spend::numeric, 2),
+      round(v_base_revenue::numeric, 2),
+      round((v_base_clicks::decimal / NULLIF(v_base_impressions, 0))::numeric, 4),
+      round((v_base_spend / NULLIF(v_base_conversions, 0))::numeric, 2),
+      round((v_base_revenue / NULLIF(v_base_spend, 0))::numeric, 2)
+    );
+  END LOOP;
+
+  -- ---- INTEGRATIONS ----
+  INSERT INTO public.integrations (user_id, channel, status, account_name, last_synced_at) VALUES
+  (v_user_id, 'meta', 'connected', 'Veltrix Agency', NOW() - interval '2 hours'),
+  (v_user_id, 'google', 'connected', 'Veltrix Ads', NOW() - interval '45 minutes'),
+  (v_user_id, 'x', 'disconnected', NULL, NULL),
+  (v_user_id, 'email', 'error', 'Mailgun', NOW() - interval '3 days');
+
+  RAISE NOTICE 'Seed data inserted successfully for user %', v_user_id;
+END $$;
+
+
+============================================================
+PART 5: ENABLE REALTIME (optional)
+============================================================
+
+-- Enable realtime for live dashboard updates
+ALTER PUBLICATION supabase_realtime ADD TABLE public.campaigns;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.campaign_metrics;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.campaign_activity;

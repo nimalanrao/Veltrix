@@ -1,0 +1,65 @@
+VELTRIX DASHBOARD — MASTER IMPLEMENTATION GUIDE
+=================================================
+
+This folder contains the full technical blueprint for the Veltrix 
+autonomous AI marketing dashboard. Every file is a deep-dive into 
+a specific system or feature.
+
+FILES IN THIS FOLDER
+--------------------
+
+01-architecture.txt
+  → Overall system architecture, routing, layout shell, file structure,
+    and how every piece connects together.
+
+02-database-schema.txt
+  → Complete Supabase SQL schema for all tables (campaigns, metrics,
+    personas, integrations, activity log), RLS policies, triggers,
+    and seed data.
+
+03-gemini-api-integration.txt
+  → Full Gemini API integration guide: text generation (ad copy, 
+    personas, AI insights), image generation (ad creatives, banners),
+    API key management, prompt engineering, rate limiting, caching,
+    and error handling.
+
+04-auth-and-guards.txt
+  → Authentication flow, auth guard component, session management,
+    profile hydration, and route protection.
+
+05-dashboard-overview-page.txt
+  → Overview page: KPI stat cards, performance chart, recent campaigns
+    table, quick actions, real-time data fetching.
+
+06-campaigns-system.txt
+  → Campaign list page, campaign detail page, filtering/sorting,
+    status management, budget tracking, and campaign CRUD operations.
+
+07-campaign-creation-wizard.txt
+  → Multi-step campaign creation wizard with Gemini AI copy generation,
+    Gemini image generation for ad creatives, audience targeting,
+    budget/schedule, review & launch flow.
+
+08-audience-system.txt
+  → Audience personas page, AI persona builder using Gemini,
+    persona management, audience analytics.
+
+09-analytics-page.txt
+  → Cross-campaign analytics dashboard, charts, channel comparisons,
+    AI-generated insights via Gemini, leaderboard, export.
+
+10-integrations-page.txt
+  → Channel integration management, connect/disconnect flows,
+    API key storage, sync status, webhook configuration.
+
+11-settings-page.txt
+  → Profile settings, billing display, security, notifications,
+    API key management, Gemini API key configuration.
+
+12-design-system.txt
+  → Complete design tokens, component styling patterns, animation
+    specs, responsive breakpoints, and reusable component library.
+
+13-implementation-order.txt
+  → Phase-by-phase build order, dependencies between phases,
+    estimated complexity, and verification checklist.

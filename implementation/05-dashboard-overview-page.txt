@@ -1,0 +1,246 @@
+DASHBOARD OVERVIEW PAGE
+========================
+
+Route: /dashboard (index route)
+File: src/pages/dashboard/Overview.tsx
+
+This is the first page users see after login. It provides a 
+high-level snapshot of all marketing performance.
+
+
+1. PAGE LAYOUT
+---------------
+
+  ┌──────────────────────────────────────────────────┐
+  │  Welcome back, Nithyanantha          Mon, Jun 30 │
+  │  Here's what's happening today.                  │
+  ├──────────────────────────────────────────────────┤
+  │                                                  │
+  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
+  │  │ Active   │ │ Total    │ │ Total    │ │ Avg      │
+  │  │ Campaigns│ │ Spend    │ │ Converts │ │ ROAS     │
+  │  │          │ │          │ │          │ │          │
+  │  │ 4        │ │ MYR 3.4K │ │ 849      │ │ 4.2x     │
+  │  │ +14% ▲   │ │ -2% ▼    │ │ +23% ▲   │ │ +8% ▲    │
+  │  │ ╱╲╱╲╱    │ │ ╱╲╱╲╱    │ │ ╱╲╱╲╱    │ │ ╱╲╱╲╱    │
+  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘
+  │                                                  │
+  │  ┌────────────────────────────────────────────┐  │
+  │  │  Performance Overview          [7d][30d]   │  │
+  │  │                                            │  │
+  │  │  ▄                                         │  │
+  │  │ ▄█▄     ▄▄                                 │  │
+  │  │▄███▄   ▄██▄▄    ▄▄    ▄▄▄                  │  │
+  │  │██████▄▄██████▄▄████▄▄█████▄                │  │
+  │  │                                            │  │
+  │  │  Spend ── Conversions ──                   │  │
+  │  └────────────────────────────────────────────┘  │
+  │                                                  │
+  │  ┌────────────────────────────────────────────┐  │
+  │  │  Recent Campaigns           [View All →]   │  │
+  │  │                                            │  │
+  │  │  Name          Channel Status  CTR  Spent  │  │
+  │  │  ─────────────────────────────────────────  │  │
+  │  │  FitTrack Pro  Meta   Active  3.8% MYR936  │  │
+  │  │  SaaS Growth   Google Active  4.5% MYR1.6K │  │
+  │  │  Summer Sale   Email  Done    2.9% MYR500  │  │
+  │  │  Brand X       X      Paused  2.1% MYR312  │  │
+  │  │  Q3 Retarget   Meta   Draft   —    MYR0    │  │
+  │  └────────────────────────────────────────────┘  │
+  │                                                  │
+  │  ┌────────────┐ ┌────────────┐ ┌────────────┐   │
+  │  │ ✨ Create  │ │ 📊 View   │ │ 🔗 Connect │   │
+  │  │ Campaign   │ │ Analytics  │ │ Channel    │   │
+  │  └────────────┘ └────────────┘ └────────────┘   │
+  │                                                  │
+  │  ┌────────────────────────────────────────────┐  │
+  │  │  AI Insights                    [Refresh]  │  │
+  │  │                                            │  │
+  │  │  🟢 Meta campaigns outperform Google by    │  │
+  │  │     2.3x ROAS. Consider budget shift.      │  │
+  │  │                                            │  │
+  │  │  🟡 Email open rates declining. Test new   │  │
+  │  │     subject line tones.                    │  │
+  │  │                                            │  │
+  │  │  🔴 X campaign paused — low CTR. Review    │  │
+  │  │     audience targeting.                    │  │
+  │  └────────────────────────────────────────────┘  │
+  └──────────────────────────────────────────────────┘
+
+
+2. DATA SOURCES
+----------------
+
+All data comes from Supabase via custom hooks:
+
+  const { user } = useAuth();
+  const { profile } = useProfile();
+  const { campaigns, loading: campaignsLoading } = useCampaigns();
+  const { aggregateMetrics, dailyMetrics } = useMetrics();
+
+Queries:
+
+  KPI Cards:
+    - Active campaigns: SELECT count(*) FROM campaigns WHERE user_id = ? AND status = 'active'
+    - Total spend: SELECT SUM(budget_spent) FROM campaigns WHERE user_id = ?
+    - Total conversions: SELECT SUM(conversions) FROM campaign_metrics WHERE campaign_id IN (user's campaigns) AND date >= NOW() - '30 days'
+    - Avg ROAS: SELECT AVG(roas) FROM campaign_metrics WHERE ... (weighted by spend)
+
+  Performance Chart:
+    SELECT date, SUM(spend), SUM(conversions), AVG(ctr), AVG(cpa)
+    FROM campaign_metrics
+    WHERE campaign_id IN (user's campaigns)
+    AND date >= NOW() - interval '{period} days'
+    GROUP BY date
+    ORDER BY date ASC
+
+  Recent Campaigns:
+    SELECT * FROM campaigns WHERE user_id = ? ORDER BY updated_at DESC LIMIT 5
+
+  AI Insights:
+    Generated via Gemini using aggregated campaign data (see 03-gemini-api-integration.txt)
+
+
+3. STAT CARD COMPONENT
+------------------------
+
+Reusable component: StatCard.tsx
+
+Props:
+  label: string        — "Active Campaigns"
+  value: string        — "4" or "MYR 3,428"
+  trend: number        — percentage change (+14 or -2)
+  icon: LucideIcon     — Activity, DollarSign, Target, TrendingUp
+  sparklineData?: number[] — 7 data points for mini chart
+
+Features:
+  - Large value in font-heading italic
+  - Green trend arrow for positive, red for negative
+  - Tiny SVG sparkline at bottom (7-day trend)
+  - Hover: subtle lift + shadow increase
+  - Loading state: skeleton pulse animation
+
+
+4. PERFORMANCE CHART COMPONENT
+--------------------------------
+
+Component: PerformanceChart.tsx
+
+Props:
+  data: Array<{ date: string, spend: number, conversions: number, ctr: number, cpa: number }>
+  activePeriod: "7d" | "14d" | "30d" | "90d"
+  activeMetric: "spend" | "conversions" | "ctr" | "cpa"
+
+Implementation options (in order of preference):
+  
+  Option A — Recharts (recommended):
+    npm install recharts
+    Use <AreaChart> with gradient fill
+    Clean, minimal, matches our design system
+    Responsive container
+
+  Option B — Custom SVG:
+    Calculate path from data points
+    SVG <path> with gradient <linearGradient> fill
+    Full design control, zero dependencies
+    More work to implement tooltips and axis labels
+
+  Option C — Chart.js via react-chartjs-2:
+    Heavier bundle, canvas-based
+    Less consistent with our SVG-first aesthetic
+    Not recommended
+
+Chart styling:
+  - Gradient fill: slate-900 at 0.2 opacity → transparent
+  - Line: 2px, slate-900
+  - Grid: dotted, slate-100
+  - Axis labels: font-body, text-xs, text-slate-400
+  - Tooltip: bg-slate-900 text-white rounded-xl shadow-lg
+  - Period tabs: pill-style toggle buttons
+
+
+5. RECENT CAMPAIGNS TABLE
+---------------------------
+
+Component: inline in Overview.tsx (or extracted if reused)
+
+Columns:
+  - Name (text, clickable → /dashboard/campaigns/:id)
+  - Channel (icon badge via ChannelBadge component)
+  - Status (pill via StatusBadge component)
+  - CTR (percentage)
+  - Spent (formatted currency)
+  - Created (relative date: "2 days ago")
+
+Styling:
+  - bg-white rounded-2xl border border-slate-200 shadow-sm
+  - Header row: text-xs uppercase tracking-wider text-slate-400
+  - Data rows: text-sm, hover:bg-slate-50, cursor-pointer
+  - "View All →" link: text-xs font-semibold text-slate-500 hover:text-slate-900
+
+
+6. QUICK ACTIONS
+-----------------
+
+Three cards in a horizontal row:
+
+  ✨ Create Campaign
+    Subtitle: "Build an AI-powered campaign in minutes"
+    → navigates to /dashboard/campaigns/new
+
+  📊 View Analytics
+    Subtitle: "Deep-dive into cross-campaign performance"
+    → navigates to /dashboard/analytics
+
+  🔗 Connect Channel
+    Subtitle: "Link your Meta, Google, or X accounts"
+    → navigates to /dashboard/integrations
+
+Styling:
+  - bg-white rounded-2xl border border-slate-200 p-5
+  - Icon in a 10x10 rounded-xl bg-slate-50 container
+  - hover: scale(1.02), shadow-md
+  - cursor-pointer, transition-all
+
+
+7. AI INSIGHTS PANEL
+---------------------
+
+Component: AIInsightPanel.tsx
+
+Uses the Gemini generateInsights() function from lib/gemini.ts.
+
+On mount (or when user clicks "Refresh"):
+  1. Gather aggregated campaign data from useCampaigns() and useMetrics()
+  2. Send to generateInsights()
+  3. Display results as insight cards
+
+Each insight card:
+  - Left border color:
+    - success (green): good performance
+    - warning (amber): declining metric
+    - opportunity (blue): actionable improvement
+  - Icon matching the type
+  - Title in font-body font-semibold
+  - Description in font-body text-sm text-slate-500
+  - Action text in font-body font-medium text-slate-800
+
+Fallback if Gemini is unavailable:
+  Show static placeholder insights based on hardcoded rules:
+  - If ROAS > 3: "Strong ROAS performance across campaigns"
+  - If any campaign paused: "Review paused campaigns for reactivation"
+  - If email CTR < 2%: "Email open rates need attention"
+
+
+8. LOADING STATES
+------------------
+
+While data is fetching:
+  - KPI cards: skeleton pulse (gray rectangles where numbers would be)
+  - Chart: skeleton rectangular area with pulse
+  - Table: 5 skeleton rows with pulse
+  - AI Insights: "Generating insights..." with spinner
+
+Skeleton component: LoadingSkeleton.tsx
+  Props: width, height, className
+  Renders a div with bg-slate-100 rounded-lg animate-pulse

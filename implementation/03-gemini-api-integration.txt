@@ -1,0 +1,721 @@
+GEMINI API INTEGRATION — COMPLETE GUIDE
+=========================================
+
+Veltrix uses the Google Gemini API for all AI features:
+  1. Ad copy generation (text)
+  2. Ad creative image generation (Imagen via Gemini)
+  3. Audience persona generation (text)
+  4. AI performance insights (text)
+  5. A/B variant generation (text)
+
+This file covers the complete integration: setup, client code,
+prompt engineering, image generation, error handling, caching,
+and rate limiting.
+
+
+============================================================
+1. SETUP & CONFIGURATION
+============================================================
+
+1.1 GET AN API KEY
+-------------------
+- Go to: https://aistudio.google.com/apikey
+- Click "Create API Key"
+- Copy the key
+- Add to .env: VITE_GEMINI_API_KEY=your-key-here
+
+1.2 INSTALL THE SDK
+--------------------
+npm install @google/generative-ai
+
+1.3 ENVIRONMENT VARIABLE
+--------------------------
+.env:
+  VITE_GEMINI_API_KEY=AIzaSy...your-key-here
+
+Access in code:
+  import.meta.env.VITE_GEMINI_API_KEY
+
+SECURITY NOTE: This key is bundled into the frontend. For production,
+proxy through Supabase Edge Functions. For demo/MVP, this is fine.
+
+
+============================================================
+2. GEMINI CLIENT (lib/gemini.ts)
+============================================================
+
+This is the core module. It initializes the Gemini client and
+exports all AI functions used across the dashboard.
+
+---------- CODE STRUCTURE ----------
+
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+
+// Graceful fallback if key is missing
+if (!API_KEY) {
+  console.warn("VITE_GEMINI_API_KEY is not set. AI features will be disabled.");
+}
+
+const genAI = API_KEY ? new GoogleGenerativeAI(API_KEY) : null;
+
+// Use gemini-2.5-flash for fast, cheap text generation
+const textModel = genAI?.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+// Use gemini-2.5-pro for complex analysis (insights, personas)
+const proModel = genAI?.getGenerativeModel({ model: "gemini-2.5-pro" });
+
+// Use Imagen 3 for image generation
+const imagenModel = genAI?.getGenerativeModel({ model: "imagen-3.0-generate-002" });
+
+Export these functions:
+  - generateAdCopy()
+  - generateAdImage()
+  - generatePersona()
+  - generateInsights()
+  - generateABVariant()
+  - isAIAvailable()
+
+
+============================================================
+3. AD COPY GENERATION (TEXT)
+============================================================
+
+3.1 FUNCTION SIGNATURE
+-----------------------
+
+interface AdCopyRequest {
+  productName: string;
+  productDescription: string;
+  channel: "meta" | "google" | "x" | "email";
+  tone: "bold" | "witty" | "professional" | "inspiring";
+  audience: string;          // persona name or custom description
+  targetAgeRange?: string;   // e.g. "25-45"
+  objective?: string;        // 'awareness' | 'leads' | 'conversions' | 'traffic'
+}
+
+interface AdCopyResponse {
+  headline: string;
+  body: string;
+  cta: string;
+  predictedCTR: number;      // e.g. 3.8
+  predictedCPA: number;      // e.g. 4.20
+  confidenceScore: number;   // 0-100
+}
+
+async function generateAdCopy(request: AdCopyRequest): Promise<AdCopyResponse>
+
+
+3.2 PROMPT ENGINEERING
+-----------------------
+
+The prompt is channel-specific. Here's the master prompt template:
+
+---------- PROMPT ----------
+
+You are an expert performance marketer and copywriter for the Veltrix 
+autonomous AI marketing platform.
+
+Generate high-converting ad copy for the following campaign:
+
+PRODUCT: {productName}
+DESCRIPTION: {productDescription}
+CHANNEL: {channel}
+TONE: {tone}
+TARGET AUDIENCE: {audience}
+AGE RANGE: {targetAgeRange}
+CAMPAIGN OBJECTIVE: {objective}
+
+CHANNEL-SPECIFIC RULES:
+- Meta (Facebook/Instagram): Headline max 40 chars. Body max 125 chars. 
+  Use emojis sparingly. Include social proof or urgency.
+- Google Search Ads: Headline max 30 chars (3 headlines). Description 
+  max 90 chars (2 descriptions). No emojis. Focus on keywords and benefits.
+- X (Twitter): Single tweet max 280 chars. Can use 1-2 emojis. 
+  Must be conversational and shareable. Include a hook.
+- Email: Subject line max 60 chars. Preview text max 100 chars. 
+  Body max 200 words. Personal tone, value-first.
+
+TONE RULES:
+- Bold: Urgent, direct, uses power words. Creates FOMO.
+- Witty: Clever wordplay, light humor, memorable. Not cringey.
+- Professional: Clean, authoritative, data-driven. Trust-building.
+- Inspiring: Aspirational, emotional, transformation-focused.
+
+Return your response in this exact JSON format:
+{
+  "headline": "...",
+  "body": "...",
+  "cta": "...",
+  "predicted_ctr": 3.8,
+  "predicted_cpa": 4.20,
+  "confidence_score": 88
+}
+
+The predicted metrics should be realistic estimates based on the 
+channel, audience, and copy quality. CTR as a percentage (e.g. 3.8 
+means 3.8%). CPA in MYR. Confidence 0-100.
+
+Return ONLY the JSON object, no markdown, no explanation.
+
+---------- END PROMPT ----------
+
+
+3.3 RESPONSE PARSING
+----------------------
+
+const result = await textModel.generateContent(prompt);
+const text = result.response.text();
+
+// Strip any markdown code fences if Gemini wraps it
+const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+const parsed: AdCopyResponse = JSON.parse(cleaned);
+
+// Validate and sanitize
+if (!parsed.headline || !parsed.body || !parsed.cta) {
+  throw new Error("Incomplete AI response");
+}
+
+return {
+  headline: parsed.headline,
+  body: parsed.body,
+  cta: parsed.cta,
+  predictedCTR: parsed.predicted_ctr ?? 2.5,
+  predictedCPA: parsed.predicted_cpa ?? 5.00,
+  confidenceScore: parsed.confidence_score ?? 70,
+};
+
+
+============================================================
+4. AD IMAGE GENERATION (IMAGEN)
+============================================================
+
+4.1 HOW IT WORKS
+-----------------
+
+Gemini's Imagen 3 model generates images from text prompts.
+We use this to create ad creative images for campaigns.
+
+The generated image is:
+  1. Returned as base64 from the API
+  2. Uploaded to Supabase Storage (bucket: "campaign-images")
+  3. Public URL stored in campaigns.generated_image_url
+
+4.2 FUNCTION SIGNATURE
+-----------------------
+
+interface AdImageRequest {
+  productName: string;
+  productDescription: string;
+  channel: "meta" | "google" | "x" | "email";
+  style?: "minimal" | "vibrant" | "corporate" | "lifestyle";
+}
+
+interface AdImageResponse {
+  imageUrl: string;          // Supabase Storage public URL
+  base64: string;            // raw base64 for preview before upload
+}
+
+async function generateAdImage(request: AdImageRequest): Promise<AdImageResponse>
+
+
+4.3 IMAGE PROMPT ENGINEERING
+------------------------------
+
+---------- PROMPT ----------
+
+Create a professional marketing advertisement image for:
+
+PRODUCT: {productName}
+DESCRIPTION: {productDescription}
+PLATFORM: {channel}
+
+STYLE: {style}
+
+IMAGE REQUIREMENTS:
+- Clean, modern, premium look
+- Product-focused composition
+- No text overlays (text will be added separately)
+- High contrast, vivid colors
+- {channel}-optimized aspect ratio:
+  * Meta: 1:1 square (1080x1080)
+  * Google: 1.91:1 landscape (1200x628)
+  * X: 16:9 landscape (1200x675)
+  * Email: 600px wide, 2:1 ratio (600x300)
+
+STYLE DETAILS:
+- Minimal: White space, single product, clean background
+- Vibrant: Bold colors, dynamic composition, energetic
+- Corporate: Professional, muted tones, business-appropriate
+- Lifestyle: Product in real-world context, human element
+
+Do NOT include any text, logos, or watermarks in the image.
+
+---------- END PROMPT ----------
+
+
+4.4 IMAGE GENERATION CODE
+---------------------------
+
+async function generateAdImage(request: AdImageRequest): Promise<AdImageResponse> {
+  if (!genAI) throw new Error("Gemini API not configured");
+
+  const prompt = buildImagePrompt(request);
+
+  // Use Imagen 3 model
+  const result = await imagenModel.generateContent(prompt);
+  const response = result.response;
+
+  // Extract image data
+  // Gemini returns inline data with base64
+  const imagePart = response.candidates[0].content.parts.find(
+    part => part.inlineData
+  );
+
+  if (!imagePart?.inlineData) {
+    throw new Error("No image generated");
+  }
+
+  const base64 = imagePart.inlineData.data;
+  const mimeType = imagePart.inlineData.mimeType; // 'image/png'
+
+  // Upload to Supabase Storage
+  const fileName = `campaign-${Date.now()}.png`;
+  const fileBuffer = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+
+  const { data, error } = await supabase.storage
+    .from('campaign-images')
+    .upload(fileName, fileBuffer, {
+      contentType: mimeType,
+      upsert: false,
+    });
+
+  if (error) throw error;
+
+  // Get public URL
+  const { data: urlData } = supabase.storage
+    .from('campaign-images')
+    .getPublicUrl(data.path);
+
+  return {
+    imageUrl: urlData.publicUrl,
+    base64: `data:${mimeType};base64,${base64}`,
+  };
+}
+
+
+4.5 SUPABASE STORAGE SETUP
+----------------------------
+
+Create a storage bucket in Supabase Dashboard → Storage:
+
+  Bucket name: campaign-images
+  Public: Yes (images need to be publicly accessible for ad previews)
+  File size limit: 5MB
+  Allowed MIME types: image/png, image/jpeg, image/webp
+
+RLS Policy for storage:
+
+  -- Allow authenticated users to upload to campaign-images
+  CREATE POLICY "Users upload campaign images"
+  ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (bucket_id = 'campaign-images');
+
+  -- Allow public read access
+  CREATE POLICY "Public read campaign images"
+  ON storage.objects FOR SELECT
+  TO public
+  USING (bucket_id = 'campaign-images');
+
+
+============================================================
+5. AUDIENCE PERSONA GENERATION
+============================================================
+
+5.1 FUNCTION
+--------------
+
+interface PersonaRequest {
+  businessDescription: string;
+  industry?: string;
+  existingCustomerInfo?: string;
+}
+
+interface GeneratedPersona {
+  name: string;
+  description: string;
+  ageMin: number;
+  ageMax: number;
+  gender: string;
+  incomeLevel: string;
+  interests: string[];
+  painPoints: string[];
+  platforms: string[];
+  toneRecommendation: string;
+}
+
+async function generatePersona(request: PersonaRequest): Promise<GeneratedPersona>
+
+
+5.2 PROMPT
+-----------
+
+---------- PROMPT ----------
+
+You are an expert audience strategist for digital marketing.
+
+Based on the following business description, generate a detailed 
+target audience persona for advertising campaigns.
+
+BUSINESS: {businessDescription}
+INDUSTRY: {industry}
+EXISTING CUSTOMER INFO: {existingCustomerInfo}
+
+Generate a persona with these attributes:
+- Name: A descriptive persona name (e.g., "Tech-Savvy Millennials")
+- Description: 2-3 sentence description of who this person is
+- Age range: Realistic min and max age
+- Gender: 'all', 'male', 'female', or 'other'
+- Income level: 'low', 'medium', 'high', or 'any'
+- Interests: Array of 5-8 specific interest keywords
+- Pain points: Array of 3-5 specific problems they face
+- Platforms: Which ad platforms work best ['meta', 'google', 'x', 'email']
+- Tone recommendation: Best ad tone for this audience ('bold', 'witty', 'professional', 'inspiring')
+
+Return ONLY valid JSON in this exact format:
+{
+  "name": "...",
+  "description": "...",
+  "age_min": 25,
+  "age_max": 45,
+  "gender": "all",
+  "income_level": "high",
+  "interests": ["...", "..."],
+  "pain_points": ["...", "..."],
+  "platforms": ["meta", "google"],
+  "tone_recommendation": "professional"
+}
+
+---------- END PROMPT ----------
+
+
+============================================================
+6. AI PERFORMANCE INSIGHTS
+============================================================
+
+6.1 FUNCTION
+--------------
+
+interface InsightRequest {
+  campaigns: Array<{
+    name: string;
+    channel: string;
+    spend: number;
+    revenue: number;
+    ctr: number;
+    cpa: number;
+    roas: number;
+    status: string;
+  }>;
+  dateRange: string;        // "Last 7 days" | "Last 30 days" etc.
+}
+
+interface AIInsight {
+  title: string;
+  description: string;
+  type: "opportunity" | "warning" | "success";
+  priority: "high" | "medium" | "low";
+  actionable: string;       // specific action the user should take
+}
+
+async function generateInsights(request: InsightRequest): Promise<AIInsight[]>
+
+
+6.2 PROMPT
+-----------
+
+---------- PROMPT ----------
+
+You are an AI marketing strategist analyzing campaign performance data.
+
+Here is the campaign data for {dateRange}:
+
+{JSON.stringify(campaigns, null, 2)}
+
+Analyze this data and generate 3-5 actionable insights. For each insight:
+- Identify patterns, anomalies, or opportunities
+- Compare channel performance
+- Suggest specific budget or targeting optimizations
+- Flag underperforming campaigns
+- Highlight top performers and why they work
+
+Return ONLY valid JSON as an array:
+[
+  {
+    "title": "Short insight title",
+    "description": "Detailed 1-2 sentence explanation with specific numbers",
+    "type": "opportunity|warning|success",
+    "priority": "high|medium|low",
+    "actionable": "Specific action: e.g. 'Shift 20% of Google budget to Meta'"
+  }
+]
+
+---------- END PROMPT ----------
+
+
+============================================================
+7. A/B VARIANT GENERATION
+============================================================
+
+For existing campaigns, generate alternative ad copy variants
+for A/B testing.
+
+7.1 FUNCTION
+--------------
+
+interface ABVariantRequest {
+  originalHeadline: string;
+  originalBody: string;
+  originalCta: string;
+  channel: string;
+  tone: string;
+  productName: string;
+  variantCount?: number;     // how many variants (default: 2)
+}
+
+interface ABVariant {
+  headline: string;
+  body: string;
+  cta: string;
+  differentiator: string;   // what makes this variant different
+}
+
+async function generateABVariant(request: ABVariantRequest): Promise<ABVariant[]>
+
+
+7.2 PROMPT
+-----------
+
+---------- PROMPT ----------
+
+You are an expert at A/B testing ad copy. Here is the original ad:
+
+HEADLINE: {originalHeadline}
+BODY: {originalBody}
+CTA: {originalCta}
+CHANNEL: {channel}
+TONE: {tone}
+PRODUCT: {productName}
+
+Generate {variantCount} alternative versions that:
+- Test a meaningfully different angle or hook
+- Keep the same channel constraints and tone
+- Each variant should test ONE specific hypothesis:
+  * Different emotional trigger (fear, curiosity, social proof)
+  * Different value proposition emphasis
+  * Different CTA urgency level
+  * Different opening hook
+
+Return ONLY valid JSON:
+[
+  {
+    "headline": "...",
+    "body": "...",
+    "cta": "...",
+    "differentiator": "Tests social proof angle instead of urgency"
+  }
+]
+
+---------- END PROMPT ----------
+
+
+============================================================
+8. ERROR HANDLING
+============================================================
+
+All Gemini functions should handle these errors:
+
+8.1 API KEY MISSING
+---------------------
+if (!genAI) {
+  return { error: "AI features require a Gemini API key. Add VITE_GEMINI_API_KEY to your environment." };
+}
+
+8.2 RATE LIMITING
+------------------
+Gemini has rate limits (varies by model and tier):
+- Free tier: ~15 requests/minute for Flash, ~2 for Pro
+- Paid tier: Higher limits
+
+Implement exponential backoff:
+
+async function callWithRetry(fn, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (error.status === 429) {
+        const delay = Math.pow(2, i) * 1000; // 1s, 2s, 4s
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error("Max retries exceeded");
+}
+
+8.3 SAFETY FILTERS
+--------------------
+Gemini may block content it considers harmful. Handle gracefully:
+
+if (result.response.candidates[0].finishReason === 'SAFETY') {
+  throw new Error("Content was filtered. Try adjusting your product description.");
+}
+
+8.4 MALFORMED JSON
+-------------------
+Sometimes Gemini returns slightly malformed JSON. Clean it:
+
+function parseGeminiJSON(text: string) {
+  // Remove markdown code fences
+  let cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  
+  // Remove any leading/trailing text before/after the JSON
+  const jsonStart = cleaned.indexOf('{') !== -1 ? cleaned.indexOf('{') : cleaned.indexOf('[');
+  const jsonEnd = cleaned.lastIndexOf('}') !== -1 ? cleaned.lastIndexOf('}') + 1 : cleaned.lastIndexOf(']') + 1;
+  
+  if (jsonStart === -1 || jsonEnd === 0) {
+    throw new Error("No JSON found in response");
+  }
+  
+  cleaned = cleaned.slice(jsonStart, jsonEnd);
+  return JSON.parse(cleaned);
+}
+
+8.5 NETWORK ERRORS
+--------------------
+try {
+  const result = await textModel.generateContent(prompt);
+  // ...
+} catch (error) {
+  if (error instanceof TypeError && error.message.includes('fetch')) {
+    throw new Error("Network error. Check your internet connection.");
+  }
+  throw error;
+}
+
+
+============================================================
+9. useGemini() HOOK
+============================================================
+
+The React hook that components use to interact with Gemini:
+
+function useGemini() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const generate = async <T>(
+    fn: () => Promise<T>
+  ): Promise<T | null> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await fn();
+      return result;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "AI generation failed");
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return {
+    loading,
+    error,
+    isAvailable: isAIAvailable(),
+    generateAdCopy: (req) => generate(() => generateAdCopy(req)),
+    generateAdImage: (req) => generate(() => generateAdImage(req)),
+    generatePersona: (req) => generate(() => generatePersona(req)),
+    generateInsights: (req) => generate(() => generateInsights(req)),
+    generateABVariant: (req) => generate(() => generateABVariant(req)),
+  };
+}
+
+
+============================================================
+10. CACHING STRATEGY
+============================================================
+
+To avoid redundant API calls and save costs:
+
+10.1 SESSION CACHE
+--------------------
+Cache generated copy in React state / context during the session.
+If user navigates away and comes back, the generated copy persists
+until page refresh.
+
+10.2 DATABASE CACHE
+---------------------
+When copy is generated and saved to a campaign, it's persisted in
+the campaigns table (generated_headline, generated_body, generated_cta,
+generated_image_url). No need to regenerate.
+
+10.3 DEBOUNCE
+--------------
+Don't allow rapid-fire "Generate" button clicks. Disable the button
+while loading, and add a 2-second cooldown after each generation.
+
+10.4 GEMINI LOG TABLE
+-----------------------
+All API calls are logged to public.gemini_log for:
+  - Usage tracking (how many generations per user)
+  - Cost estimation (approximate token counts)
+  - Debugging (save prompts and responses)
+  - Analytics (which types of generation are most used)
+
+
+============================================================
+11. MODEL SELECTION STRATEGY
+============================================================
+
+Different features use different models for cost/speed optimization:
+
+  FEATURE                    MODEL               REASON
+  ─────────────────────────────────────────────────────────
+  Ad copy generation         gemini-2.5-flash     Fast, cheap, good enough
+  A/B variant generation     gemini-2.5-flash     Fast iteration
+  Image generation           imagen-3.0-generate  Best image quality
+  Persona generation         gemini-2.5-flash     Structured output
+  Performance insights       gemini-2.5-pro       Needs deeper analysis
+  Complex recommendations    gemini-2.5-pro       Multi-step reasoning
+
+
+============================================================
+12. USAGE IN CAMPAIGN CREATION WIZARD
+============================================================
+
+The wizard (CampaignNew.tsx) uses Gemini at these points:
+
+  STEP 3 — AI Copy Generation:
+    User fills product name + description + tone + channel
+    → Clicks "Generate with AI" button
+    → Shows loading spinner with "Generating your ad copy..."
+    → Displays generated headline, body, CTA in a preview card
+    → Shows predicted CTR, CPA, confidence score below
+    → "Regenerate" button for new variations
+    → "Edit" toggle for manual tweaks
+    → optionally "Generate Image" button for ad creative
+
+  STEP 5 — Review:
+    Shows the final ad preview with generated copy
+    If image was generated, shows it in the ad mockup
+    Channel-specific preview format (Meta card, Google result, etc.)
+
+  After launch:
+    Activity log entry: "AI copy generated via Gemini Flash"
+    Gemini log entry with the prompt and response saved

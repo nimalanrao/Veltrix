@@ -1,0 +1,196 @@
+ANALYTICS PAGE
+================
+
+Route: /dashboard/analytics
+File: src/pages/dashboard/Analytics.tsx
+
+
+============================================================
+1. PAGE LAYOUT
+============================================================
+
+  ┌──────────────────────────────────────────────────┐
+  │  Analytics                                       │
+  │  Cross-campaign performance insights.            │
+  │                                                  │
+  │  Date: [7d] [14d] [30d] [90d]  Channel: [All ▼] │
+  ├──────────────────────────────────────────────────┤
+  │                                                  │
+  │  SUMMARY KPIs (6 cards in a row)                 │
+  │  ┌────┐ ┌────┐ ┌────┐ ┌────┐ ┌────┐ ┌────┐     │
+  │  │Spend│ │Rev │ │ROAS│ │Conv│ │CTR │ │CPA │     │
+  │  │3.4K │ │14K │ │4.2x│ │849 │ │3.6%│ │4.01│     │
+  │  └────┘ └────┘ └────┘ └────┘ └────┘ └────┘     │
+  │                                                  │
+  │  SPEND vs REVENUE CHART                          │
+  │  ┌────────────────────────────────────────────┐  │
+  │  │  ▄▄                                        │  │
+  │  │ ▄██▄▄    ▄▄▄   REVENUE (green area)        │  │
+  │  │████████▄█████▄▄▄                           │  │
+  │  │─────────────────                           │  │
+  │  │▄▄▄▄▄▄▄▄▄▄▄▄▄▄  SPEND (blue line)          │  │
+  │  └────────────────────────────────────────────┘  │
+  │                                                  │
+  │  CHANNEL PERFORMANCE                             │
+  │  ┌────────────────────────────────────────────┐  │
+  │  │  Meta    ████████████████  4.2x ROAS       │  │
+  │  │  Google  ██████████████    3.8x ROAS       │  │
+  │  │  Email   ████████          2.1x ROAS       │  │
+  │  │  X       ██████            1.4x ROAS       │  │
+  │  └────────────────────────────────────────────┘  │
+  │                                                  │
+  │  TOP CAMPAIGNS LEADERBOARD                       │
+  │  ┌────────────────────────────────────────────┐  │
+  │  │ Rank  Name            Ch   ROAS   Spend    │  │
+  │  │  1    SaaS Growth     G    5.2x   MYR1.6K  │  │
+  │  │  2    FitTrack Pro    M    4.2x   MYR936   │  │
+  │  │  3    Summer Sale     E    2.1x   MYR500   │  │
+  │  │  4    Brand X         X    1.4x   MYR312   │  │
+  │  └────────────────────────────────────────────┘  │
+  │                                                  │
+  │  AI INSIGHTS                                     │
+  │  ┌────────────────────────────────────────────┐  │
+  │  │ (Same AIInsightPanel as Overview page)     │  │
+  │  │ But with more detailed, analytics-focused  │  │
+  │  │ insights based on the selected date range  │  │
+  │  │ and filters.                               │  │
+  │  └────────────────────────────────────────────┘  │
+  └──────────────────────────────────────────────────┘
+
+
+============================================================
+2. DATA SOURCES
+============================================================
+
+All data aggregated from campaign_metrics table:
+
+  Summary KPIs:
+    SELECT
+      SUM(spend) as total_spend,
+      SUM(revenue) as total_revenue,
+      CASE WHEN SUM(spend) > 0 THEN SUM(revenue) / SUM(spend) ELSE 0 END as roas,
+      SUM(conversions) as total_conversions,
+      CASE WHEN SUM(impressions) > 0 THEN SUM(clicks)::decimal / SUM(impressions) ELSE 0 END as avg_ctr,
+      CASE WHEN SUM(conversions) > 0 THEN SUM(spend) / SUM(conversions) ELSE 0 END as avg_cpa
+    FROM campaign_metrics cm
+    JOIN campaigns c ON cm.campaign_id = c.id
+    WHERE c.user_id = :userId
+    AND cm.date >= NOW() - interval ':period days'
+
+  Spend vs Revenue Chart:
+    SELECT date, SUM(spend), SUM(revenue)
+    FROM campaign_metrics cm
+    JOIN campaigns c ON cm.campaign_id = c.id
+    WHERE c.user_id = :userId AND cm.date >= ...
+    GROUP BY date ORDER BY date ASC
+
+  Channel Performance:
+    SELECT c.channel,
+      SUM(cm.spend), SUM(cm.revenue),
+      AVG(cm.ctr), AVG(cm.cpa),
+      CASE WHEN SUM(cm.spend) > 0 THEN SUM(cm.revenue)/SUM(cm.spend) ELSE 0 END as roas
+    FROM campaign_metrics cm
+    JOIN campaigns c ON cm.campaign_id = c.id
+    WHERE c.user_id = :userId AND cm.date >= ...
+    GROUP BY c.channel
+
+  Top Campaigns:
+    SELECT c.name, c.channel,
+      SUM(cm.spend), SUM(cm.revenue),
+      CASE WHEN SUM(cm.spend) > 0 THEN SUM(cm.revenue)/SUM(cm.spend) ELSE 0 END as roas
+    FROM campaign_metrics cm
+    JOIN campaigns c ON cm.campaign_id = c.id
+    WHERE c.user_id = :userId AND cm.date >= ...
+    GROUP BY c.id, c.name, c.channel
+    ORDER BY roas DESC
+    LIMIT 10
+
+
+============================================================
+3. CHARTS
+============================================================
+
+Spend vs Revenue Chart:
+  - Dual area chart
+  - Spend: blue area (opacity 0.3), blue line
+  - Revenue: green area (opacity 0.3), green line
+  - Shared x-axis (dates), dual y-axis
+  - Tooltip shows both values on hover
+
+Channel Performance:
+  - Horizontal bar chart
+  - One bar per channel, sorted by ROAS descending
+  - Channel icon + name on left
+  - ROAS value on right
+  - Bar color matches channel brand color
+
+Both charts use the same PerformanceChart component pattern,
+or Recharts <BarChart> / <AreaChart>.
+
+
+============================================================
+4. AI INSIGHTS (ANALYTICS-SPECIFIC)
+============================================================
+
+Uses Gemini generateInsights() with more data context:
+
+  - Include all campaign metrics for the selected period
+  - Include channel comparisons
+  - Include trend data (is performance improving or declining?)
+
+Prompt additions for analytics page:
+  "Provide deeper analytical insights. Compare channels.
+   Identify trends over the {period} period. Suggest
+   specific budget reallocation percentages. Highlight
+   the highest and lowest performing campaigns with reasons."
+
+Display:
+  - Same AIInsightPanel component
+  - But with additional "Export Report" button (future)
+
+
+============================================================
+5. useMetrics() HOOK
+============================================================
+
+  function useMetrics(options?: { period?: number, campaignId?: string }) {
+    const { user } = useAuth();
+    const [metrics, setMetrics] = useState({
+      daily: [],        // daily data points for charts
+      aggregate: null,  // summary KPIs
+      byChannel: [],    // channel breakdowns
+      topCampaigns: [], // ranked campaigns
+    });
+    const [loading, setLoading] = useState(true);
+
+    const fetchMetrics = async () => {
+      const period = options?.period || 30;
+
+      // Fetch daily metrics
+      let query = supabase
+        .from("campaign_metrics")
+        .select("*, campaigns!inner(user_id, name, channel)")
+        .eq("campaigns.user_id", user.id)
+        .gte("date", new Date(Date.now() - period * 86400000).toISOString().split('T')[0])
+        .order("date", { ascending: true });
+
+      if (options?.campaignId) {
+        query = query.eq("campaign_id", options.campaignId);
+      }
+
+      const { data, error } = await query;
+      if (error) { setLoading(false); return; }
+
+      // Process into aggregate, daily, channel, and top campaigns
+      // (client-side aggregation from the raw daily data)
+      const processed = processMetrics(data);
+      setMetrics(processed);
+      setLoading(false);
+    };
+
+    useEffect(() => {
+      if (user) fetchMetrics();
+    }, [user, options?.period, options?.campaignId]);
+
+    return { ...metrics, loading, refetch: fetchMetrics };
+  }

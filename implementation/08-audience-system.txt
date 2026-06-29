@@ -1,0 +1,178 @@
+AUDIENCE SYSTEM
+================
+
+Route: /dashboard/audience
+File: src/pages/dashboard/Audience.tsx
+
+
+============================================================
+1. PAGE LAYOUT
+============================================================
+
+  ┌──────────────────────────────────────────────────┐
+  │  Audience Personas                               │
+  │  Build and manage AI-powered audience profiles.  │
+  │                                   [+ New Persona]│
+  ├──────────────────────────────────────────────────┤
+  │                                                  │
+  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐│
+  │  │ 🎯 Tech     │ │ 🛒 E-comm  │ │ 💪 Fitness  ││
+  │  │ Founders    │ │ Shoppers    │ │ Enthus.     ││
+  │  │             │ │             │ │             ││
+  │  │ 25-45, All  │ │ 28-55, All  │ │ 18-40, All  ││
+  │  │ SaaS, AI,   │ │ Shopify,    │ │ Gym, Yoga,  ││
+  │  │ Startups    │ │ Facebook    │ │ Nutrition   ││
+  │  │             │ │             │ │             ││
+  │  │ Meta, X     │ │ Meta, Goog, │ │ Meta, X     ││
+  │  │             │ │ Email       │ │             ││
+  │  │ Tone: Bold  │ │ Tone: Pro   │ │ Tone: Insp  ││
+  │  │             │ │             │ │             ││
+  │  │ Used in: 2  │ │ Used in: 2  │ │ Used in: 1  ││
+  │  │ campaigns   │ │ campaigns   │ │ campaigns   ││
+  │  │             │ │             │ │             ││
+  │  │ 🤖 AI Made │ │ 🤖 AI Made │ │ ✍️ Manual   ││
+  │  │             │ │             │ │             ││
+  │  │ [Edit][Del] │ │ [Edit][Del] │ │ [Edit][Del] ││
+  │  └─────────────┘ └─────────────┘ └─────────────┘│
+  │                                                  │
+  │  ┌────────────────────────────────────────────┐  │
+  │  │  ✨ AI Persona Builder                    │  │
+  │  │                                            │  │
+  │  │  Describe your business and we'll generate │  │
+  │  │  a target audience persona using AI.       │  │
+  │  │                                            │  │
+  │  │  Business Description                      │  │
+  │  │  ┌──────────────────────────────────────┐  │  │
+  │  │  │ We sell AI-powered fitness wearables │  │  │
+  │  │  │ to health-conscious millennials...   │  │  │
+  │  │  └──────────────────────────────────────┘  │  │
+  │  │                                            │  │
+  │  │  Industry (optional)                       │  │
+  │  │  ┌──────────────────────────────────────┐  │  │
+  │  │  │ Health & Fitness Technology          │  │  │
+  │  │  └──────────────────────────────────────┘  │  │
+  │  │                                            │  │
+  │  │  [✨ Generate Persona with AI]            │  │
+  │  │                                            │  │
+  │  │  ── AFTER GENERATION ──                    │  │
+  │  │                                            │  │
+  │  │  ┌──────────────────────────────────────┐  │  │
+  │  │  │ Generated Persona Preview           │  │  │
+  │  │  │                                      │  │  │
+  │  │  │ Name: Active Tech Millennials       │  │  │
+  │  │  │ Age: 22-38, All genders             │  │  │
+  │  │  │ Interests: Wearables, AI, Fitness   │  │  │
+  │  │  │ Pain Points: Data accuracy,         │  │  │
+  │  │  │   battery life, app integration     │  │  │
+  │  │  │ Platforms: Meta, X                  │  │  │
+  │  │  │ Recommended Tone: Inspiring         │  │  │
+  │  │  │                                      │  │  │
+  │  │  │ [Save Persona] [Regenerate] [Edit]  │  │  │
+  │  │  └──────────────────────────────────────┘  │  │
+  │  └────────────────────────────────────────────┘  │
+  └──────────────────────────────────────────────────┘
+
+
+============================================================
+2. PERSONA CARD COMPONENT
+============================================================
+
+File: src/components/dashboard/PersonaCard.tsx
+
+Props:
+  persona: AudiencePersona
+  onEdit: (id: string) => void
+  onDelete: (id: string) => void
+
+Renders:
+  - Name with emoji icon
+  - Age range + gender
+  - Interest tags (truncated to 3, "+N more" if more)
+  - Platform badges (small channel icons)
+  - Recommended tone badge
+  - "Used in X campaigns" counter
+  - AI badge if ai_generated === true
+  - Edit / Delete buttons (footer)
+
+Styling:
+  - bg-white rounded-2xl border border-slate-200 p-6
+  - hover:shadow-md transition-all
+  - Interest tags: bg-slate-100 rounded-full px-2 py-0.5 text-[10px]
+
+
+============================================================
+3. AI PERSONA BUILDER FLOW
+============================================================
+
+Uses Gemini generatePersona() from lib/gemini.ts.
+
+Flow:
+  1. User enters business description + optional industry
+  2. Clicks "Generate Persona with AI"
+  3. Loading: spinner + "Analyzing your market..."
+  4. Gemini returns structured persona data
+  5. Display in preview card with editable fields
+  6. User reviews, edits if needed
+  7. Clicks "Save Persona"
+  8. Inserted into audience_personas table via Supabase
+  9. Card appears in the grid above
+
+Edit mode:
+  - All fields become editable inputs
+  - Save / Cancel buttons appear
+
+
+============================================================
+4. MANUAL PERSONA CREATION
+============================================================
+
+"+ New Persona" button opens a modal/drawer with form fields:
+  - Name (text)
+  - Description (textarea)
+  - Age min / max (number inputs)
+  - Gender (select: all, male, female)
+  - Interests (tag input)
+  - Platforms (checkbox: meta, google, x, email)
+  - Recommended tone (select)
+
+Save → inserts into audience_personas with ai_generated = false.
+
+
+============================================================
+5. DATA HOOK: usePersonas()
+============================================================
+
+  function usePersonas() {
+    const { user } = useAuth();
+    const [personas, setPersonas] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    const fetchPersonas = async () => {
+      const { data } = await supabase
+        .from("audience_personas")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      setPersonas(data || []);
+      setLoading(false);
+    };
+
+    const createPersona = async (persona) => {
+      const { data, error } = await supabase
+        .from("audience_personas")
+        .insert({ ...persona, user_id: user.id })
+        .select()
+        .single();
+      if (!error) setPersonas(prev => [data, ...prev]);
+      return { data, error };
+    };
+
+    const updatePersona = async (id, updates) => { ... };
+    const deletePersona = async (id) => { ... };
+
+    useEffect(() => {
+      if (user) fetchPersonas();
+    }, [user]);
+
+    return { personas, loading, createPersona, updatePersona, deletePersona };
+  }

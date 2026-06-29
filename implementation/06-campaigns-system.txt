@@ -1,0 +1,461 @@
+CAMPAIGNS SYSTEM
+==================
+
+Covers:
+  - Campaign list page (/dashboard/campaigns)
+  - Campaign detail page (/dashboard/campaigns/:id)
+  - useCampaigns() hook
+  - Campaign CRUD operations
+  - Filtering, sorting, status management
+
+
+============================================================
+1. CAMPAIGNS LIST PAGE
+============================================================
+
+Route: /dashboard/campaigns
+File: src/pages/dashboard/Campaigns.tsx
+
+
+1.1 PAGE HEADER
+-----------------
+  Title: "Campaigns"
+  Subtitle: "Manage, monitor, and optimize your marketing campaigns."
+  Primary CTA: "+ New Campaign" button → /dashboard/campaigns/new
+    - bg-slate-900 text-white rounded-full px-5 py-2.5
+
+
+1.2 FILTER BAR
+----------------
+
+  ┌──────────────────────────────────────────────────────┐
+  │ [All] [Active] [Paused] [Draft] [Completed]          │
+  │                                                      │
+  │ 🔍 Search campaigns...     Channel: [All ▼]  Sort ▼  │
+  └──────────────────────────────────────────────────────┘
+
+  Status tabs:
+    - Segmented control (pill buttons)
+    - Active tab: bg-slate-900 text-white
+    - Inactive: bg-slate-100 text-slate-600
+    - Clicking filters campaigns by status
+
+  Search:
+    - Filters by campaign name (client-side filter)
+    - Debounced 300ms
+
+  Channel filter dropdown:
+    - All Channels, Meta, Google, X, Email
+
+  Sort dropdown:
+    - Newest First (default)
+    - Oldest First
+    - Highest Spend
+    - Best CTR
+    - Most Conversions
+
+  View toggle (icon buttons):
+    - Grid view (default): LayoutGrid icon
+    - Table view: List icon
+
+
+1.3 CAMPAIGN CARDS (GRID VIEW)
+-------------------------------
+
+Grid: grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6
+
+Each card (CampaignCard.tsx):
+
+  ┌─────────────────────────────────────┐
+  │ ┌──┐  FitTrack Pro Launch     ⋯    │
+  │ │📱│  Meta Sponsored Ad             │
+  │ └──┘                               │
+  │                                     │
+  │  ● Active                           │
+  │                                     │
+  │  Budget Progress                    │
+  │  ████████████░░░░░░  62%            │
+  │  MYR 936 / MYR 1,500               │
+  │                                     │
+  │  ┌─────────┐ ┌─────────┐ ┌────────┐│
+  │  │ CTR     │ │ CPA     │ │ ROAS   ││
+  │  │ 3.8%    │ │ MYR 4.20│ │ 4.2x   ││
+  │  └─────────┘ └─────────┘ └────────┘│
+  │                                     │
+  │  Created Jun 1, 2026               │
+  └─────────────────────────────────────┘
+
+  Props:
+    campaign: Campaign object from Supabase
+
+  Features:
+    - Channel icon + label (ChannelBadge component)
+    - Status pill (StatusBadge component)
+    - Budget progress bar:
+      - Width: (budget_spent / total_budget) * 100%
+      - Color: green <60%, amber 60-85%, red >85%
+    - Three mini metric boxes (CTR, CPA, ROAS)
+    - Three-dot menu (⋯):
+      - View Details → /dashboard/campaigns/:id
+      - Pause/Resume → toggle status
+      - Duplicate → creates copy with " (Copy)" suffix
+      - Delete → confirmation modal → hard delete
+    - Click card body → navigate to detail page
+
+  Styling:
+    - bg-white rounded-2xl border border-slate-200 p-6
+    - hover:shadow-md hover:border-slate-300
+    - transition-all duration-200
+
+
+1.4 CAMPAIGN TABLE (TABLE VIEW)
+---------------------------------
+
+Columns:
+  □  Name         Channel   Status    Budget    Spent     CTR    CPA    Created
+  ──────────────────────────────────────────────────────────────────────────────
+  □  FitTrack     Meta      ● Active  MYR1,500  MYR936   3.8%   4.20   Jun 1
+  □  SaaS Growth  Google    ● Active  MYR2,400  MYR1,680 4.5%   3.10   Jun 5
+  ...
+
+  Features:
+    - Checkbox column for bulk selection
+    - Bulk actions bar appears when items selected:
+      "2 selected: [Pause All] [Delete All]"
+    - Sortable column headers (click to sort)
+    - Row hover: bg-slate-50
+    - Row click → campaign detail page
+
+
+1.5 EMPTY STATE
+-----------------
+
+When no campaigns exist:
+
+  ┌──────────────────────────────────┐
+  │                                  │
+  │         ✨                       │
+  │   No campaigns yet              │
+  │                                  │
+  │   Your AI marketing engine is    │
+  │   ready. Create your first       │
+  │   campaign to get started.       │
+  │                                  │
+  │   [+ Create Campaign]           │
+  │                                  │
+  └──────────────────────────────────┘
+
+
+1.6 PAGINATION
+---------------
+
+Below the grid/table:
+  ← Previous   Page 1 of 3   Next →
+
+  12 campaigns per page
+  Only show if total > 12
+
+
+============================================================
+2. CAMPAIGN DETAIL PAGE
+============================================================
+
+Route: /dashboard/campaigns/:id
+File: src/pages/dashboard/CampaignDetail.tsx
+
+
+2.1 HEADER SECTION
+--------------------
+
+  ┌──────────────────────────────────────────────────┐
+  │  ← Back to Campaigns                            │
+  │                                                  │
+  │  FitTrack Pro Launch                             │
+  │  Meta Sponsored Ad  ·  ● Active                  │
+  │                                                  │
+  │  [Edit] [Duplicate] [Pause] [Delete]             │
+  └──────────────────────────────────────────────────┘
+
+  - "← Back" link returns to /dashboard/campaigns
+  - Campaign name is large (text-3xl font-heading italic)
+  - Channel badge + status badge inline
+  - Action buttons:
+    - Edit: opens inline editing mode
+    - Duplicate: creates a copy
+    - Pause/Resume: toggles status between active/paused
+    - Delete: confirmation modal
+
+
+2.2 METRICS ROW
+-----------------
+
+Five stat cards in a row (using StatCard component):
+
+  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐
+  │ Impress.  │ │ Clicks    │ │ CTR       │ │ Converts  │ │ CPA       │
+  │ 24,800    │ │ 942       │ │ 3.80%     │ │ 57        │ │ MYR 4.20  │
+  │ +12% ▲    │ │ +8% ▲     │ │ -0.2% ▼   │ │ +15% ▲    │ │ -5% ▲     │
+  └───────────┘ └───────────┘ └───────────┘ └───────────┘ └───────────┘
+
+  Data source:
+    SELECT SUM(impressions), SUM(clicks), AVG(ctr), SUM(conversions), AVG(cpa)
+    FROM campaign_metrics
+    WHERE campaign_id = :id
+
+
+2.3 PERFORMANCE CHART
+-----------------------
+
+Same PerformanceChart component as Overview, but filtered to single campaign.
+
+  - Line chart: impressions, clicks, conversions over time
+  - Toggle metric buttons: Impressions | Clicks | Conversions | Spend
+  - Date range: 7d | 14d | 30d | All
+
+
+2.4 AI-GENERATED COPY SECTION
+-------------------------------
+
+  ┌────────────────────────────────────────────┐
+  │  Generated Ad Copy                         │
+  │                                            │
+  │  ┌──────────────────────────────────────┐  │
+  │  │ HEADLINE                            │  │
+  │  │ 🔥 Stop scrolling. FitTrack Pro     │  │
+  │  │ just changed the game.              │  │
+  │  │                                      │  │
+  │  │ BODY                                │  │
+  │  │ Track every rep. Optimize every      │  │
+  │  │ night. The smartest fitness ring     │  │
+  │  │ ever built — now with AI.           │  │
+  │  │                                      │  │
+  │  │ CTA: Get Yours Now →               │  │
+  │  └──────────────────────────────────────┘  │
+  │                                            │
+  │  [Regenerate Copy] [Generate A/B Variant]  │
+  │                                            │
+  │  ┌──────────────────────────────────────┐  │
+  │  │ AD PREVIEW (channel-specific)       │  │
+  │  │                                      │  │
+  │  │ ┌────────────────────────────────┐  │  │
+  │  │ │ [Generated Image]             │  │  │
+  │  │ │                                │  │  │
+  │  │ │ 🔥 Stop scrolling...          │  │  │
+  │  │ │ Track every rep...            │  │  │
+  │  │ │ [Get Yours Now →]             │  │  │
+  │  │ │                                │  │  │
+  │  │ │ Sponsored · veltrix.com       │  │  │
+  │  │ └────────────────────────────────┘  │  │
+  │  └──────────────────────────────────────┘  │
+  └────────────────────────────────────────────┘
+
+  AdPreview component renders channel-specific mockups:
+    - Meta: Facebook/Instagram ad card format
+    - Google: Search result with headline, URL, description
+    - X: Tweet card with character count
+    - Email: Newsletter preview with subject, preview, body
+
+  "Regenerate Copy" → calls Gemini with same params, replaces copy
+  "Generate A/B Variant" → calls generateABVariant(), shows comparison
+
+
+2.5 GENERATED IMAGE SECTION
+-----------------------------
+
+If campaign has a generated_image_url:
+  - Display the Gemini-generated ad creative image
+  - "Regenerate Image" button
+  - Image displayed within the AdPreview mockup
+
+If no image yet:
+  - "Generate Ad Image" button
+  - Calls generateAdImage() from lib/gemini.ts
+  - Shows loading state with "Generating your ad creative..."
+  - On success, uploads to Supabase Storage, saves URL to campaign
+
+
+2.6 BUDGET TRACKER
+--------------------
+
+  ┌──────────────────────────────────┐
+  │  Budget                          │
+  │                                  │
+  │  ████████████████░░░░  62%       │
+  │  MYR 936 spent of MYR 1,500     │
+  │                                  │
+  │  Daily: MYR 50/day              │
+  │  Strategy: Lowest Cost           │
+  │  Started: Jun 1, 2026            │
+  │  Ends: Jul 15, 2026              │
+  │  Projected: Jul 8 (budget runs   │
+  │  out at current rate)            │
+  └──────────────────────────────────┘
+
+
+2.7 ACTIVITY LOG
+-----------------
+
+Component: ActivityLog.tsx
+
+  ┌──────────────────────────────────┐
+  │  Activity                        │
+  │                                  │
+  │  ● Jun 28 — Budget increased     │
+  │    from MYR 1,200 to MYR 1,500  │
+  │                                  │
+  │  ● Jun 22 — A/B test: Variant B  │
+  │    outperformed A by 12%         │
+  │                                  │
+  │  ● Jun 15 — AI copy generated    │
+  │    via Gemini Flash              │
+  │                                  │
+  │  ● Jun 1 — Campaign launched     │
+  │                                  │
+  │  ● Jun 1 — Campaign created      │
+  └──────────────────────────────────┘
+
+  Data source:
+    SELECT * FROM campaign_activity
+    WHERE campaign_id = :id
+    ORDER BY created_at DESC
+
+  Styling:
+    - Timeline with dots on the left
+    - Each entry: date + event description
+    - Different dot colors per event_type:
+      - created: slate
+      - launched: green
+      - paused: amber
+      - copy_generated: blue
+      - budget_changed: purple
+
+
+============================================================
+3. useCampaigns() HOOK
+============================================================
+
+Location: src/hooks/useCampaigns.ts
+
+  function useCampaigns() {
+    const { user } = useAuth();
+    const [campaigns, setCampaigns] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    // Fetch all campaigns
+    const fetchCampaigns = async () => {
+      const { data, error } = await supabase
+        .from("campaigns")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      if (!error) setCampaigns(data);
+      setLoading(false);
+    };
+
+    // Create campaign
+    const createCampaign = async (campaign) => {
+      const { data, error } = await supabase
+        .from("campaigns")
+        .insert({ ...campaign, user_id: user.id })
+        .select()
+        .single();
+      if (!error) setCampaigns(prev => [data, ...prev]);
+      return { data, error };
+    };
+
+    // Update campaign
+    const updateCampaign = async (id, updates) => {
+      const { data, error } = await supabase
+        .from("campaigns")
+        .update(updates)
+        .eq("id", id)
+        .select()
+        .single();
+      if (!error) {
+        setCampaigns(prev => prev.map(c => c.id === id ? data : c));
+      }
+      return { data, error };
+    };
+
+    // Delete campaign
+    const deleteCampaign = async (id) => {
+      const { error } = await supabase
+        .from("campaigns")
+        .delete()
+        .eq("id", id);
+      if (!error) {
+        setCampaigns(prev => prev.filter(c => c.id !== id));
+      }
+      return { error };
+    };
+
+    // Toggle pause/resume
+    const toggleStatus = async (id, currentStatus) => {
+      const newStatus = currentStatus === "active" ? "paused" : "active";
+      return updateCampaign(id, { status: newStatus });
+    };
+
+    // Duplicate campaign
+    const duplicateCampaign = async (campaign) => {
+      const { id, created_at, updated_at, budget_spent, ...rest } = campaign;
+      return createCampaign({
+        ...rest,
+        name: campaign.name + " (Copy)",
+        status: "draft",
+        budget_spent: 0,
+      });
+    };
+
+    useEffect(() => {
+      if (user) fetchCampaigns();
+    }, [user]);
+
+    return {
+      campaigns,
+      loading,
+      createCampaign,
+      updateCampaign,
+      deleteCampaign,
+      toggleStatus,
+      duplicateCampaign,
+      refetch: fetchCampaigns,
+    };
+  }
+
+
+============================================================
+4. HELPER COMPONENTS
+============================================================
+
+4.1 ChannelBadge.tsx
+---------------------
+
+  Props: channel: "meta" | "google" | "x" | "email"
+
+  Renders: icon + label in a pill
+
+  Icons:
+    - meta: Facebook icon (custom SVG or 📱)
+    - google: Search icon (🔍 or custom)
+    - x: X/Twitter icon (custom SVG)
+    - email: Mail icon from lucide
+
+  Colors:
+    - meta: bg-blue-50 text-blue-700
+    - google: bg-amber-50 text-amber-700
+    - x: bg-slate-100 text-slate-700
+    - email: bg-purple-50 text-purple-700
+
+
+4.2 StatusBadge.tsx
+--------------------
+
+  Props: status: "active" | "paused" | "draft" | "completed"
+
+  Renders: dot + label in a pill
+
+  Colors:
+    - active: green dot, bg-emerald-50 text-emerald-700
+    - paused: amber dot, bg-amber-50 text-amber-700
+    - draft: gray dot, bg-slate-100 text-slate-500
+    - completed: blue dot, bg-blue-50 text-blue-700

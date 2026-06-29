@@ -1,0 +1,217 @@
+AUTHENTICATION & ROUTE GUARDS
+===============================
+
+1. AUTH FLOW OVERVIEW
+---------------------
+
+  Register → Supabase Auth signUp() → auto-login → /dashboard
+  Login    → Supabase Auth signInWithPassword() → /dashboard
+  Logout   → Supabase Auth signOut() → /
+  
+  Protected routes check for active session.
+  If no session → redirect to /login.
+
+
+2. AuthGuard COMPONENT
+-----------------------
+
+Location: src/components/dashboard/AuthGuard.tsx
+
+Props:
+  children: React.ReactNode
+
+Behavior:
+  1. On mount, call supabase.auth.getSession()
+  2. Subscribe to supabase.auth.onAuthStateChange()
+  3. Three states:
+     - LOADING: Show full-screen spinner (centered Veltrix logo + spinner)
+     - AUTHENTICATED: Render children (the dashboard)
+     - UNAUTHENTICATED: Redirect to /login via navigate()
+
+Code structure:
+
+  function AuthGuard({ children }) {
+    const [session, setSession] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
+
+    useEffect(() => {
+      // Check initial session
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session);
+        setLoading(false);
+      });
+
+      // Listen for auth changes (login, logout, token refresh)
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        (_event, session) => {
+          setSession(session);
+          if (!session) navigate("/login");
+        }
+      );
+
+      return () => subscription.unsubscribe();
+    }, [navigate]);
+
+    if (loading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50">
+          <div className="flex flex-col items-center gap-4">
+            <img src={logoSvg} alt="" className="h-10 w-10 animate-pulse" />
+            <span className="text-sm font-body text-slate-400">Loading...</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (!session) {
+      return null; // navigate will handle redirect
+    }
+
+    return children;
+  }
+
+
+3. useAuth() HOOK
+------------------
+
+Location: src/hooks/useAuth.ts
+
+Provides auth state and actions to any component:
+
+  function useAuth() {
+    const [user, setUser] = useState(null);
+    const [session, setSession] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      supabase.auth.getSession().then(({ data }) => {
+        setSession(data.session);
+        setUser(data.session?.user ?? null);
+        setLoading(false);
+      });
+
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        (_event, session) => {
+          setSession(session);
+          setUser(session?.user ?? null);
+        }
+      );
+
+      return () => subscription.unsubscribe();
+    }, []);
+
+    const signOut = async () => {
+      await supabase.auth.signOut();
+    };
+
+    return {
+      user,           // Supabase User object (id, email, user_metadata)
+      session,        // Supabase Session object (access_token, etc.)
+      loading,        // true while checking initial session
+      isAuthenticated: !!session,
+      signOut,
+    };
+  }
+
+
+4. useProfile() HOOK
+---------------------
+
+Location: src/hooks/useProfile.ts
+
+Fetches and updates the user's profile from public.profiles table:
+
+  function useProfile() {
+    const { user } = useAuth();
+    const [profile, setProfile] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      if (!user) return;
+
+      supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single()
+        .then(({ data, error }) => {
+          if (!error) setProfile(data);
+          setLoading(false);
+        });
+    }, [user]);
+
+    const updateProfile = async (updates) => {
+      if (!user) return;
+      const { data, error } = await supabase
+        .from("profiles")
+        .update(updates)
+        .eq("id", user.id)
+        .select()
+        .single();
+      if (!error) setProfile(data);
+      return { data, error };
+    };
+
+    return { profile, loading, updateProfile };
+  }
+
+
+5. ROUTE USAGE IN App.tsx
+--------------------------
+
+  <Route
+    path="/dashboard"
+    element={
+      <AuthGuard>
+        <DashboardLayout />
+      </AuthGuard>
+    }
+  >
+    <Route index element={<Overview />} />
+    <Route path="campaigns" element={<Campaigns />} />
+    ...
+  </Route>
+
+The AuthGuard wraps the entire DashboardLayout. Since DashboardLayout
+uses <Outlet />, all child routes are also protected.
+
+
+6. LOGIN REDIRECT WITH RETURN URL
+-----------------------------------
+
+When AuthGuard redirects to /login, preserve the intended destination:
+
+  navigate("/login", { state: { from: location.pathname } });
+
+Then in Login.tsx after successful auth:
+
+  const location = useLocation();
+  const from = location.state?.from || "/dashboard";
+  navigate(from);
+
+
+7. LOGOUT FLOW
+---------------
+
+In the sidebar or user dropdown:
+
+  const { signOut } = useAuth();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/");
+  };
+
+Supabase's onAuthStateChange fires, AuthGuard detects null session,
+and the redirect to /login happens automatically.
+
+
+8. SESSION PERSISTENCE
+-----------------------
+
+Supabase Auth persists sessions in localStorage by default.
+On page refresh, getSession() retrieves the stored session.
+The access token auto-refreshes before expiry (handled by Supabase SDK).
+
+No additional configuration needed — sessions survive browser refreshes.

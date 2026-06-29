@@ -1,0 +1,288 @@
+DESIGN SYSTEM
+==============
+
+All dashboard components follow the existing Veltrix landing page
+aesthetic. This file defines every design token and pattern.
+
+
+============================================================
+1. COLOR PALETTE
+============================================================
+
+  PRIMARY:
+    slate-900  #0f172a  → buttons, active nav, headings
+    slate-800  #1e293b  → button hover
+    slate-700  #334155  → secondary text emphasis
+    slate-600  #475569  → body text, nav links
+    slate-500  #64748b  → muted text, labels
+    slate-400  #94a3b8  → placeholder text, subtle labels
+    slate-300  #cbd5e1  → borders on hover
+    slate-200  #e2e8f0  → card borders, dividers
+    slate-100  #f1f5f9  → tag backgrounds, subtle fills
+    slate-50   #f8fafc  → page background, card alt bg
+
+  ACCENT (status colors):
+    emerald-500 #10b981 → success, active, positive trends
+    emerald-50  #ecfdf5 → success background
+    rose-500    #f43f5e → error, negative trends, delete
+    rose-50     #fff1f2 → error background
+    amber-500   #f59e0b → warning, paused state
+    amber-50    #fffbeb → warning background
+    blue-500    #3b82f6 → info, completed state
+    blue-50     #eff6ff → info background
+    purple-500  #8b5cf6 → email channel accent
+    purple-50   #faf5ff → email background
+
+  CHANNEL COLORS:
+    Meta:    blue-600 #2563eb
+    Google:  amber-600 #d97706
+    X:       slate-800 #1e293b
+    Email:   purple-600 #7c3aed
+
+
+============================================================
+2. TYPOGRAPHY
+============================================================
+
+  Heading font: 'Instrument Serif', serif
+    Usage: page titles, stat values, campaign names
+    Always italic
+    Classes: font-heading italic
+
+  Body font: 'Barlow', sans-serif
+    Usage: everything else — labels, paragraphs, buttons, nav
+    Weights: 300 (light), 400 (regular), 500 (medium), 600 (semibold)
+    Classes: font-body
+
+  SIZE SCALE:
+    text-[10px]  → tags, tiny labels
+    text-xs      → 12px → labels, badges, metadata
+    text-sm      → 14px → body text, descriptions, buttons
+    text-base    → 16px → larger body text
+    text-lg      → 18px → card titles
+    text-xl      → 20px → section titles
+    text-2xl     → 24px → —
+    text-3xl     → 30px → page titles
+    text-4xl     → 36px → stat values (overview)
+    text-5xl     → 48px → hero stat values
+
+  TRACKING:
+    tracking-tight → headings
+    tracking-wider → uppercase labels (spacing: wider)
+    tracking-[-3px] → hero headline only
+
+
+============================================================
+3. SPACING
+============================================================
+
+  PAGE PADDING:
+    Main content area: p-8 md:p-10
+    Max width container: max-w-6xl mx-auto
+
+  CARD PADDING:
+    Standard: p-6 md:p-8
+    Compact: p-4 md:p-5
+
+  GRID GAPS:
+    Standard: gap-6
+    Compact: gap-4
+    Wide: gap-8
+
+  SECTION SPACING:
+    Between sections: mb-8 md:mb-10
+    Between header and content: mb-6
+    Between label and input: gap-1.5
+
+
+============================================================
+4. COMPONENT PATTERNS
+============================================================
+
+4.1 CARDS
+----------
+  Standard card:
+    bg-white rounded-2xl border border-slate-200 shadow-sm
+    hover:shadow-md transition-shadow duration-200
+
+  Glass card (from landing page):
+    liquid-glass bg-white/70 border border-slate-100 rounded-2xl
+
+  Selected/active card:
+    bg-slate-900 text-white border-slate-800
+
+  Clickable card (add):
+    cursor-pointer
+    hover:border-slate-300
+    active:scale-[0.98]
+
+4.2 BUTTONS
+------------
+  Primary:
+    bg-slate-900 text-white rounded-full px-5 py-2.5
+    text-sm font-body font-semibold
+    hover:bg-slate-800
+    active:scale-[0.97]
+    shadow-md shadow-slate-900/10
+    transition-all duration-150
+
+  Secondary:
+    bg-white text-slate-700 border border-slate-200 rounded-full px-5 py-2.5
+    hover:bg-slate-50 hover:border-slate-300
+
+  Danger:
+    bg-rose-500 text-white rounded-full
+    hover:bg-rose-600
+
+  Ghost:
+    bg-transparent text-slate-500
+    hover:text-slate-900 hover:bg-slate-100
+    rounded-xl px-3 py-2
+
+  Disabled:
+    opacity-50 cursor-not-allowed
+
+4.3 INPUTS
+-----------
+  Standard:
+    w-full bg-white border border-slate-200 rounded-xl
+    px-4 py-3 text-sm font-body text-slate-900
+    placeholder-slate-400
+    outline-none
+    focus:border-slate-400 focus:ring-4 focus:ring-slate-100
+    transition-all hover:border-slate-300
+
+  With icon:
+    Same as above + pl-12
+    Icon positioned: absolute left-4 top-1/2 -translate-y-1/2
+
+4.4 BADGES / PILLS
+--------------------
+  Status badge:
+    inline-flex items-center gap-1.5 rounded-full px-2.5 py-1
+    text-[10px] font-body font-semibold uppercase tracking-wider
+
+  Tag:
+    bg-slate-100 rounded-full px-2.5 py-1
+    text-[10px] font-body font-semibold text-slate-600
+
+4.5 TABLES
+-----------
+  Container: bg-white rounded-2xl border border-slate-200 overflow-hidden
+  Header row: bg-slate-50 text-xs uppercase tracking-wider text-slate-400 font-body font-semibold
+  Data rows: text-sm font-body, border-b border-slate-100 last:border-0
+  Row hover: hover:bg-slate-50
+  Cell padding: px-4 py-3
+
+4.6 MODALS
+-----------
+  Overlay: fixed inset-0 bg-black/50 backdrop-blur-sm z-50
+  Modal: bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4
+  Padding: p-6 md:p-8
+  Close button: absolute top-4 right-4, X icon
+
+
+============================================================
+5. ANIMATION SPECS
+============================================================
+
+  Page transitions (existing):
+    opacity: 0→1, y: 8→0
+    duration: 0.35s
+    ease: [0.23, 1, 0.32, 1]
+
+  Card hover:
+    transform: translateY(-2px)
+    box-shadow: increase
+    transition: all 200ms ease
+
+  Button press:
+    transform: scale(0.97)
+    transition: 160ms cubic-bezier(0.23, 1, 0.32, 1)
+
+  Content enter (in-view):
+    opacity: 0→1, y: 20→0
+    duration: 0.5s
+    stagger: 0.1s between items
+
+  Wizard step transition:
+    Enter: opacity: 0→1, x: 20→0
+    Exit: opacity: 1→0, x: 0→-20
+    duration: 0.3s
+
+  Loading skeletons:
+    animate-pulse (Tailwind built-in)
+    bg-slate-100 rounded-lg
+
+  Toast notifications:
+    Slide in from top-right
+    opacity: 0→1, y: -10→0
+    Auto-dismiss after 4s
+
+
+============================================================
+6. RESPONSIVE BREAKPOINTS
+============================================================
+
+  Mobile:     < 768px (md)
+  Tablet:     768px - 1024px
+  Desktop:    > 1024px (lg)
+  Wide:       > 1280px (xl)
+
+  SIDEBAR:
+    lg+: fixed sidebar, w-64
+    <lg: hidden, hamburger toggle → overlay drawer
+
+  STAT CARDS:
+    xs: 1 column
+    sm: 2 columns
+    md: 2-3 columns
+    lg+: 4 columns
+
+  CAMPAIGN CARDS:
+    xs-sm: 1 column
+    md: 2 columns
+    xl: 3 columns
+
+  TOP BAR:
+    Always sticky
+    On mobile: simplified (no search, just hamburger + avatar)
+
+
+============================================================
+7. ICON USAGE
+============================================================
+
+  All icons from lucide-react.
+
+  Standard size: h-4 w-4 (16px)
+  Large icons: h-5 w-5 (20px) — in icon containers
+  Small icons: h-3.5 w-3.5 — inline with text
+
+  Common icons used in dashboard:
+    LayoutDashboard → Overview nav
+    Activity → Campaigns nav
+    Sparkles → AI features, create
+    Users → Audience nav
+    BarChart3 → Analytics nav
+    Link → Integrations nav
+    Settings → Settings nav
+    LogOut → Logout
+    Plus → Create/add buttons
+    Search → Search input
+    ChevronDown → Dropdowns
+    ArrowUpRight → External links, CTAs
+    TrendingUp → Positive trends
+    TrendingDown → Negative trends
+    Target → Conversions
+    DollarSign → Spend/budget
+    Calendar → Date pickers
+    MoreHorizontal → Three-dot menu
+    Edit → Edit actions
+    Trash2 → Delete actions
+    Copy → Duplicate
+    Pause → Pause campaign
+    Play → Resume campaign
+    RefreshCw → Regenerate, sync
+    Eye → View/preview
+    Download → Export

@@ -1,0 +1,201 @@
+INTEGRATIONS PAGE
+==================
+
+Route: /dashboard/integrations
+File: src/pages/dashboard/Integrations.tsx
+
+
+============================================================
+1. PAGE LAYOUT
+============================================================
+
+  ┌──────────────────────────────────────────────────┐
+  │  Integrations                                    │
+  │  Connect your ad platforms and tools.            │
+  ├──────────────────────────────────────────────────┤
+  │                                                  │
+  │  ┌─────────────────┐ ┌─────────────────┐        │
+  │  │ 📱 Meta Ads      │ │ 🔍 Google Ads   │        │
+  │  │                  │ │                  │        │
+  │  │ ● Connected      │ │ ● Connected      │        │
+  │  │ Veltrix Agency   │ │ Veltrix Ads      │        │
+  │  │ Synced 2h ago    │ │ Synced 45m ago   │        │
+  │  │                  │ │                  │        │
+  │  │ [Sync] [Disconn] │ │ [Sync] [Disconn] │        │
+  │  └─────────────────┘ └─────────────────┘        │
+  │                                                  │
+  │  ┌─────────────────┐ ┌─────────────────┐        │
+  │  │ 𝕏 X / Twitter   │ │ ✉ Email         │        │
+  │  │                  │ │                  │        │
+  │  │ ○ Not Connected  │ │ ⚠ Error          │        │
+  │  │                  │ │ Mailgun          │        │
+  │  │                  │ │ API key expired  │        │
+  │  │                  │ │                  │        │
+  │  │ [Connect]        │ │ [Reconnect]      │        │
+  │  └─────────────────┘ └─────────────────┘        │
+  │                                                  │
+  │  ┌────────────────────────────────────────────┐  │
+  │  │  Webhook Configuration                    │  │
+  │  │                                            │  │
+  │  │  Webhook URL                               │  │
+  │  │  ┌──────────────────────────────────────┐  │  │
+  │  │  │ https://your-app.com/webhooks       │  │  │
+  │  │  └──────────────────────────────────────┘  │  │
+  │  │                                            │  │
+  │  │  Events:                                   │  │
+  │  │  ☑ Campaign created                       │  │
+  │  │  ☑ Campaign completed                     │  │
+  │  │  ☐ Budget exceeded                        │  │
+  │  │  ☐ Performance alert                      │  │
+  │  │                                            │  │
+  │  │  [Save Webhook Settings]                  │  │
+  │  └────────────────────────────────────────────┘  │
+  └──────────────────────────────────────────────────┘
+
+
+============================================================
+2. INTEGRATION CARD COMPONENT
+============================================================
+
+File: src/components/dashboard/IntegrationCard.tsx
+
+Props:
+  integration: {
+    channel: string,
+    status: "connected" | "disconnected" | "error",
+    accountName?: string,
+    lastSyncedAt?: string,
+    errorMessage?: string,
+  }
+  onConnect: () => void
+  onDisconnect: () => void
+  onSync: () => void
+
+Status display:
+  - Connected: green dot, "● Connected", account name, last sync time
+  - Disconnected: gray dot, "○ Not Connected", [Connect] button
+  - Error: red dot, "⚠ Error", error message, [Reconnect] button
+
+Channel icon:
+  - Meta: blue Facebook icon or custom SVG
+  - Google: colored Google icon
+  - X: black X logo
+  - Email: purple Mail icon
+
+Actions:
+  - Connect: opens connect modal/drawer
+  - Disconnect: confirmation dialog → updates status to 'disconnected'
+  - Sync Now: triggers sync (updates last_synced_at)
+  - Reconnect (error state): same as Connect flow
+
+
+============================================================
+3. CONNECT FLOW
+============================================================
+
+When user clicks "Connect" on a disconnected channel:
+
+Modal opens with:
+  ┌──────────────────────────────────┐
+  │  Connect Meta Ads               │
+  │                                  │
+  │  For this demo, enter an API key │
+  │  or account identifier.          │
+  │                                  │
+  │  Account Name                    │
+  │  ┌────────────────────────────┐  │
+  │  │ My Agency Account         │  │
+  │  └────────────────────────────┘  │
+  │                                  │
+  │  API Key                         │
+  │  ┌────────────────────────────┐  │
+  │  │ ••••••••••••••••••        │  │
+  │  └────────────────────────────┘  │
+  │                                  │
+  │  [Test Connection] [Connect]    │
+  │                                  │
+  │  ✅ Connection successful!      │
+  └──────────────────────────────────┘
+
+Flow:
+  1. User enters account name + API key
+  2. "Test Connection" → simulates API ping (delay + success)
+  3. "Connect" → upserts into integrations table:
+     status: 'connected', account_name, api_key_hash, last_synced_at: NOW()
+  4. Card updates to show "Connected" state
+
+For MVP: The "Test Connection" is simulated (2s delay → always succeeds).
+The API key is stored but not actually used for real API calls.
+
+
+============================================================
+4. WEBHOOK CONFIGURATION
+============================================================
+
+Stored in a simple key-value or as a JSONB column on the profiles table,
+or as a separate webhooks table.
+
+For MVP: Just store as JSONB on profiles:
+  profiles.webhook_settings = {
+    url: "https://...",
+    events: ["campaign.created", "campaign.completed"]
+  }
+
+Not functional for MVP — just shows the UI and saves the preferences.
+
+
+============================================================
+5. DATA HOOK
+============================================================
+
+  function useIntegrations() {
+    const { user } = useAuth();
+    const [integrations, setIntegrations] = useState([]);
+
+    const fetchIntegrations = async () => {
+      const { data } = await supabase
+        .from("integrations")
+        .select("*")
+        .eq("user_id", user.id);
+      setIntegrations(data || []);
+    };
+
+    const connectChannel = async (channel, accountName, apiKey) => {
+      const { data, error } = await supabase
+        .from("integrations")
+        .upsert({
+          user_id: user.id,
+          channel,
+          status: "connected",
+          account_name: accountName,
+          api_key_hash: apiKey, // In production: hash this server-side
+          last_synced_at: new Date().toISOString(),
+        }, { onConflict: "user_id,channel" })
+        .select()
+        .single();
+      if (!error) fetchIntegrations();
+      return { data, error };
+    };
+
+    const disconnectChannel = async (channel) => {
+      await supabase
+        .from("integrations")
+        .update({ status: "disconnected", account_name: null, api_key_hash: null })
+        .eq("user_id", user.id)
+        .eq("channel", channel);
+      fetchIntegrations();
+    };
+
+    const syncChannel = async (channel) => {
+      await supabase
+        .from("integrations")
+        .update({ last_synced_at: new Date().toISOString() })
+        .eq("user_id", user.id)
+        .eq("channel", channel);
+      fetchIntegrations();
+    };
+
+    useEffect(() => { if (user) fetchIntegrations(); }, [user]);
+
+    return { integrations, connectChannel, disconnectChannel, syncChannel };
+  }

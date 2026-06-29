@@ -1,0 +1,415 @@
+IMPLEMENTATION ORDER
+=====================
+
+Phase-by-phase build order with dependencies, estimated
+complexity, and verification steps.
+
+
+============================================================
+PHASE 1: FOUNDATION
+============================================================
+
+  WHAT: Database schema + Supabase setup
+  FILES: database/dashboard-schema.sql
+  DEPS: None
+  COMPLEXITY: Low
+
+  TASKS:
+    [ ] Run the full SQL schema from 02-database-schema.txt in Supabase SQL Editor
+    [ ] Create the following tables:
+        - campaigns
+        - campaign_metrics
+        - audience_personas
+        - integrations
+        - campaign_activity
+        - gemini_log
+    [ ] Apply all RLS policies
+    [ ] Create all triggers (updated_at, activity log auto-entries)
+    [ ] Create Supabase Storage bucket: "campaign-images" (public)
+    [ ] Run seed data script for the test user
+    [ ] Verify: query each table, confirm seed data exists
+
+  VERIFY:
+    - SELECT * FROM campaigns; → should show 5 campaigns
+    - SELECT * FROM campaign_metrics; → should show ~80+ daily rows
+    - SELECT * FROM audience_personas; → should show 3 personas
+    - SELECT * FROM integrations; → should show 4 integration entries
+
+
+============================================================
+PHASE 2: GEMINI API CLIENT
+============================================================
+
+  WHAT: Gemini integration library + hook
+  FILES:
+    - src/lib/gemini.ts
+    - src/hooks/useGemini.ts
+    - .env (add VITE_GEMINI_API_KEY)
+  DEPS: npm install @google/generative-ai
+  COMPLEXITY: Medium
+
+  TASKS:
+    [ ] Install @google/generative-ai package
+    [ ] Add VITE_GEMINI_API_KEY to .env
+    [ ] Create lib/gemini.ts with:
+        - GoogleGenerativeAI client init
+        - generateAdCopy() function with prompt
+        - generateAdImage() function with Imagen 3
+        - generatePersona() function
+        - generateInsights() function
+        - generateABVariant() function
+        - isAIAvailable() check
+        - parseGeminiJSON() helper
+        - Error handling (rate limits, safety filters, network)
+    [ ] Create hooks/useGemini.ts wrapper hook
+    [ ] Create lib/utils.ts with formatting helpers
+
+  VERIFY:
+    - Call generateAdCopy() with test data from browser console
+    - Confirm JSON response parses correctly
+    - Test error handling with invalid API key
+
+
+============================================================
+PHASE 3: AUTH SYSTEM
+============================================================
+
+  WHAT: Auth guard + hooks
+  FILES:
+    - src/components/dashboard/AuthGuard.tsx
+    - src/hooks/useAuth.ts
+    - src/hooks/useProfile.ts
+  DEPS: Phase 1 (profiles table must exist)
+  COMPLEXITY: Low-Medium
+
+  TASKS:
+    [ ] Create useAuth.ts hook (session management)
+    [ ] Create useProfile.ts hook (profile CRUD)
+    [ ] Create AuthGuard.tsx component (loading/redirect/render)
+    [ ] Update Login.tsx to use return URL on redirect
+    [ ] Test: logged out user visiting /dashboard → redirected to /login
+    [ ] Test: logged in user visiting /dashboard → sees dashboard
+
+  VERIFY:
+    - Sign in as test@gmail.com → redirected to /dashboard
+    - Sign out → redirected to /
+    - Visit /dashboard without session → redirected to /login
+
+
+============================================================
+PHASE 4: DASHBOARD SHELL
+============================================================
+
+  WHAT: Layout, sidebar, topbar, routing
+  FILES:
+    - src/components/dashboard/DashboardLayout.tsx
+    - src/components/dashboard/Sidebar.tsx
+    - src/components/dashboard/TopBar.tsx
+    - src/App.tsx (update routing)
+  DEPS: Phase 3 (AuthGuard)
+  COMPLEXITY: Medium
+
+  TASKS:
+    [ ] Create Sidebar.tsx with navigation links
+        - Logo + brand name
+        - Nav items with icons and active state
+        - Plan badge at bottom
+        - Logout button
+        - Mobile drawer mode
+    [ ] Create TopBar.tsx with:
+        - Page title (dynamic based on route)
+        - Search input (optional for MVP)
+        - User avatar dropdown (name, email, logout)
+    [ ] Create DashboardLayout.tsx combining sidebar + topbar + <Outlet />
+    [ ] Update App.tsx with nested dashboard routes
+    [ ] Create placeholder pages for all routes (just titles)
+    [ ] Create hooks/useCampaigns.ts
+    [ ] Create hooks/useMetrics.ts
+
+  VERIFY:
+    - Navigate to /dashboard → see sidebar + topbar + "Overview" placeholder
+    - Click each nav link → URL changes, page title updates
+    - Mobile: hamburger opens sidebar drawer
+    - Active nav item highlighted correctly
+
+
+============================================================
+PHASE 5: OVERVIEW PAGE
+============================================================
+
+  WHAT: KPI cards, chart, recent campaigns, quick actions, AI insights
+  FILES:
+    - src/pages/dashboard/Overview.tsx
+    - src/components/dashboard/StatCard.tsx
+    - src/components/dashboard/PerformanceChart.tsx
+    - src/components/dashboard/AIInsightPanel.tsx
+    - src/components/dashboard/LoadingSkeleton.tsx
+  DEPS: Phase 4 (layout), Phase 2 (Gemini for insights), npm install recharts
+  COMPLEXITY: High
+
+  TASKS:
+    [ ] Install recharts (or build custom SVG charts)
+    [ ] Create StatCard.tsx (reusable metric card)
+    [ ] Create PerformanceChart.tsx (area chart with period toggle)
+    [ ] Create AIInsightPanel.tsx (Gemini-generated insights)
+    [ ] Create LoadingSkeleton.tsx (pulse animation placeholder)
+    [ ] Build Overview.tsx:
+        - Welcome header with user name + date
+        - 4 KPI stat cards (data from useCampaigns + useMetrics)
+        - Performance chart (data from useMetrics)
+        - Recent campaigns table (data from useCampaigns)
+        - Quick action cards (Create, Analytics, Integrations)
+        - AI Insights panel (data from useGemini)
+
+  VERIFY:
+    - All 4 stat cards show correct numbers from seed data
+    - Chart renders with 30 days of data
+    - Recent campaigns table shows 5 campaigns
+    - AI insights generate on page load (or on click)
+    - Loading skeletons appear while data fetches
+
+
+============================================================
+PHASE 6: CAMPAIGNS PAGES
+============================================================
+
+  WHAT: Campaign list + campaign detail
+  FILES:
+    - src/pages/dashboard/Campaigns.tsx
+    - src/pages/dashboard/CampaignDetail.tsx
+    - src/components/dashboard/CampaignCard.tsx
+    - src/components/dashboard/CampaignTable.tsx
+    - src/components/dashboard/ChannelBadge.tsx
+    - src/components/dashboard/StatusBadge.tsx
+    - src/components/dashboard/ActivityLog.tsx
+    - src/components/dashboard/AdPreview.tsx
+    - src/components/dashboard/EmptyState.tsx
+  DEPS: Phase 5 (StatCard, PerformanceChart)
+  COMPLEXITY: High
+
+  TASKS:
+    [ ] Create ChannelBadge.tsx and StatusBadge.tsx
+    [ ] Create CampaignCard.tsx (grid view)
+    [ ] Create CampaignTable.tsx (table view)
+    [ ] Create EmptyState.tsx
+    [ ] Build Campaigns.tsx:
+        - Filter bar (status tabs, search, sort, channel)
+        - Grid/table view toggle
+        - Campaign cards or rows
+        - Pagination
+        - Empty state
+    [ ] Create AdPreview.tsx (channel-specific mockup)
+    [ ] Create ActivityLog.tsx (timeline)
+    [ ] Build CampaignDetail.tsx:
+        - Header with actions (edit, pause, duplicate, delete)
+        - Metrics row (5 stat cards)
+        - Performance chart (single campaign)
+        - AI copy section with regenerate
+        - Ad image section (display or generate)
+        - Budget tracker
+        - Activity log
+
+  VERIFY:
+    - Campaign list shows all 5 seed campaigns
+    - Filter by status works
+    - Click campaign → detail page loads
+    - Detail page shows correct metrics
+    - Pause/resume toggles status
+    - Delete removes campaign (with confirmation)
+
+
+============================================================
+PHASE 7: CAMPAIGN CREATION WIZARD
+============================================================
+
+  WHAT: 5-step wizard with Gemini integration
+  FILES:
+    - src/pages/dashboard/CampaignNew.tsx
+    - src/components/dashboard/WizardStep.tsx
+    - src/components/dashboard/AdImagePreview.tsx
+  DEPS: Phase 2 (Gemini), Phase 6 (AdPreview, ChannelBadge)
+  COMPLEXITY: Very High (most complex feature)
+
+  TASKS:
+    [ ] Create WizardStep.tsx (animated step wrapper)
+    [ ] Build CampaignNew.tsx with all 5 steps:
+        - Step 1: Campaign basics (name, objective, channel)
+        - Step 2: Audience targeting (persona select or custom)
+        - Step 3: AI copy + image generation (Gemini integration)
+        - Step 4: Budget & schedule
+        - Step 5: Review & launch
+    [ ] Implement "Generate Ad Copy with AI" button → Gemini
+    [ ] Implement "Generate Ad Image with AI" button → Gemini Imagen
+    [ ] Implement "Save as Draft" and "Launch Campaign" actions
+    [ ] Create AdImagePreview.tsx for generated image display
+
+  VERIFY:
+    - Complete wizard start to finish
+    - AI copy generation works (returns headline, body, CTA)
+    - AI image generation works (returns image, uploads to Storage)
+    - "Save as Draft" creates campaign with draft status
+    - "Launch" creates campaign with active status
+    - New campaign appears in campaign list
+
+
+============================================================
+PHASE 8: AUDIENCE PAGE
+============================================================
+
+  WHAT: Persona grid + AI persona builder
+  FILES:
+    - src/pages/dashboard/Audience.tsx
+    - src/components/dashboard/PersonaCard.tsx
+  DEPS: Phase 2 (Gemini for persona generation)
+  COMPLEXITY: Medium
+
+  TASKS:
+    [ ] Create PersonaCard.tsx
+    [ ] Build Audience.tsx:
+        - Persona grid (from seed data)
+        - AI Persona Builder form
+        - Generate persona with Gemini
+        - Save/edit/delete personas
+        - Manual creation form
+
+  VERIFY:
+    - 3 seed personas display correctly
+    - AI persona generation works
+    - Create, edit, delete all work
+    - Personas appear in campaign wizard (Step 2)
+
+
+============================================================
+PHASE 9: ANALYTICS PAGE
+============================================================
+
+  WHAT: Cross-campaign analytics dashboard
+  FILES:
+    - src/pages/dashboard/Analytics.tsx
+  DEPS: Phase 5 (PerformanceChart, StatCard, AIInsightPanel)
+  COMPLEXITY: Medium-High
+
+  TASKS:
+    [ ] Build Analytics.tsx:
+        - Date range filter bar
+        - 6 summary KPI cards
+        - Spend vs Revenue dual chart
+        - Channel performance horizontal bars
+        - Top campaigns leaderboard table
+        - AI insights (analytics-specific)
+
+  VERIFY:
+    - All KPIs aggregate correctly from seed data
+    - Charts render correctly
+    - Date range filter changes the data
+    - Channel comparison shows all channels
+
+
+============================================================
+PHASE 10: INTEGRATIONS + SETTINGS
+============================================================
+
+  WHAT: Channel connections + account settings
+  FILES:
+    - src/pages/dashboard/Integrations.tsx
+    - src/components/dashboard/IntegrationCard.tsx
+    - src/pages/dashboard/Settings.tsx
+  DEPS: Phase 3 (useProfile for settings)
+  COMPLEXITY: Medium
+
+  TASKS:
+    [ ] Create IntegrationCard.tsx
+    [ ] Build Integrations.tsx:
+        - 4 channel cards (from seed data)
+        - Connect modal with API key input
+        - Disconnect flow
+        - Sync now action
+        - Webhook configuration section
+    [ ] Build Settings.tsx with tabs:
+        - Profile (read/update from profiles table)
+        - Billing (display-only for MVP)
+        - Security (password change via Supabase Auth)
+        - Notifications (toggle preferences)
+        - API Keys (display-only for MVP)
+
+  VERIFY:
+    - Integration cards show correct statuses from seed data
+    - Connect flow works (modal → save to DB)
+    - Profile settings save correctly
+    - Password change works via Supabase Auth
+
+
+============================================================
+PHASE 11: POLISH
+============================================================
+
+  WHAT: Final touches, responsive testing, performance
+  FILES: All
+  DEPS: All previous phases
+  COMPLEXITY: Medium
+
+  TASKS:
+    [ ] Add loading skeletons to every page
+    [ ] Add empty states where applicable
+    [ ] Test all pages on mobile viewport
+    [ ] Test sidebar drawer on mobile
+    [ ] Add toast notifications for actions (save, delete, generate)
+    [ ] Add confirmation modals for destructive actions
+    [ ] Run `npm run build` — fix any TypeScript errors
+    [ ] Test the full user flow:
+        Register → Login → Overview → Create Campaign → View Detail
+    [ ] Performance: check chart rendering speed
+    [ ] Accessibility: verify tab navigation, ARIA labels
+    [ ] Cross-browser: test Chrome + Firefox + Safari (if available)
+
+  VERIFY:
+    - Zero TypeScript build errors
+    - Zero console errors during normal usage
+    - All animations run at 60fps
+    - Mobile layout works on 375px viewport
+    - All CRUD operations work end-to-end
+
+
+============================================================
+DEPENDENCY GRAPH
+============================================================
+
+  Phase 1 (Database)
+    ↓
+  Phase 2 (Gemini) ─────────────┐
+    ↓                           │
+  Phase 3 (Auth)                │
+    ↓                           │
+  Phase 4 (Shell/Layout)        │
+    ↓                           │
+  Phase 5 (Overview) ←──────────┤
+    ↓                           │
+  Phase 6 (Campaigns) ←────────┤
+    ↓                           │
+  Phase 7 (Wizard) ←────────────┘
+    ↓
+  Phase 8 (Audience) ← Phase 2
+    ↓
+  Phase 9 (Analytics) ← Phase 5
+    ↓
+  Phase 10 (Integrations + Settings)
+    ↓
+  Phase 11 (Polish)
+
+
+============================================================
+TOTAL NEW FILES: ~25
+============================================================
+
+  Pages:        8  (Overview, Campaigns, CampaignNew, CampaignDetail,
+                    Audience, Analytics, Integrations, Settings)
+  Components:  15  (DashboardLayout, Sidebar, TopBar, AuthGuard,
+                    StatCard, CampaignCard, CampaignTable,
+                    PerformanceChart, ChannelBadge, StatusBadge,
+                    EmptyState, WizardStep, AdPreview, AdImagePreview,
+                    PersonaCard, IntegrationCard, ActivityLog,
+                    AIInsightPanel, LoadingSkeleton)
+  Hooks:        5  (useAuth, useProfile, useCampaigns, useMetrics, useGemini)
+  Lib:          2  (gemini.ts, utils.ts)
+  Database:     2  (schema SQL, seed SQL)
+  Modified:     2  (App.tsx, .env)

@@ -1,0 +1,234 @@
+SETTINGS PAGE
+==============
+
+Route: /dashboard/settings
+File: src/pages/dashboard/Settings.tsx
+
+
+============================================================
+1. PAGE LAYOUT
+============================================================
+
+Tab-based layout:
+
+  ┌──────────────────────────────────────────────────┐
+  │  Settings                                        │
+  │                                                  │
+  │  [Profile] [Billing] [Security] [Notifications]  │
+  │   [API Keys]                                     │
+  ├──────────────────────────────────────────────────┤
+  │                                                  │
+  │  (Tab content renders below)                     │
+  │                                                  │
+  └──────────────────────────────────────────────────┘
+
+Tabs implemented as internal state (no sub-routes needed).
+Active tab: border-b-2 border-slate-900 text-slate-900
+Inactive: text-slate-500 hover:text-slate-800
+
+
+============================================================
+2. PROFILE TAB
+============================================================
+
+  ┌──────────────────────────────────────────┐
+  │  Profile Information                     │
+  │                                          │
+  │  Avatar                                  │
+  │  ┌──────┐                                │
+  │  │  N   │  Nithyanantha                  │
+  │  │      │  test@gmail.com                │
+  │  └──────┘                                │
+  │                                          │
+  │  Full Name                               │
+  │  ┌────────────────────────────────────┐  │
+  │  │ Nithyanantha                      │  │
+  │  └────────────────────────────────────┘  │
+  │                                          │
+  │  Email (read-only)                       │
+  │  ┌────────────────────────────────────┐  │
+  │  │ test@gmail.com               🔒   │  │
+  │  └────────────────────────────────────┘  │
+  │                                          │
+  │  Company Name                            │
+  │  ┌────────────────────────────────────┐  │
+  │  │ Veltrix Agency                    │  │
+  │  └────────────────────────────────────┘  │
+  │                                          │
+  │  Company Size                            │
+  │  ┌────────────────────────────────────┐  │
+  │  │ 1-10 employees             ▼      │  │
+  │  └────────────────────────────────────┘  │
+  │                                          │
+  │  [Save Changes]                          │
+  └──────────────────────────────────────────┘
+
+  Data source: useProfile() hook → profiles table
+  Save: updateProfile({ name, company_name, company_size })
+
+  Avatar:
+    - Shows first letter of name in a colored circle
+    - Color based on name hash (consistent per user)
+    - Future: file upload to Supabase Storage
+
+
+============================================================
+3. BILLING TAB
+============================================================
+
+  ┌──────────────────────────────────────────┐
+  │  Current Plan                            │
+  │                                          │
+  │  ┌──────────────────────────────────┐   │
+  │  │  ⚡ Pro Plan                     │   │
+  │  │                                    │   │
+  │  │  MYR 149/mo · Billed annually    │   │
+  │  │                                    │   │
+  │  │  ✓ Unlimited campaigns           │   │
+  │  │  ✓ Autonomous A/B testing        │   │
+  │  │  ✓ 24/7 bid optimization         │   │
+  │  │  ✓ Advanced tone tuning          │   │
+  │  │                                    │   │
+  │  │  [Upgrade] [Manage Subscription] │   │
+  │  └──────────────────────────────────┘   │
+  │                                          │
+  │  Usage This Month                        │
+  │  ┌──────────────────────────────────┐   │
+  │  │  Campaigns: 4 / Unlimited        │   │
+  │  │  AI Generations: 23 / 500        │   │
+  │  │  ████████░░░░░░░  4.6%           │   │
+  │  └──────────────────────────────────┘   │
+  │                                          │
+  │  Billing History                         │
+  │  ┌──────────────────────────────────┐   │
+  │  │ Date       Amount   Status  Inv  │   │
+  │  │ Jun 2026   MYR 149  ● Paid  📄  │   │
+  │  │ May 2026   MYR 149  ● Paid  📄  │   │
+  │  │ Apr 2026   MYR 149  ● Paid  📄  │   │
+  │  └──────────────────────────────────┘   │
+  └──────────────────────────────────────────┘
+
+  For MVP: This is display-only with hardcoded data.
+  No actual Stripe integration.
+  "Upgrade" and "Manage Subscription" are placeholder buttons.
+
+
+============================================================
+4. SECURITY TAB
+============================================================
+
+  ┌──────────────────────────────────────────┐
+  │  Change Password                         │
+  │                                          │
+  │  Current Password                        │
+  │  ┌────────────────────────────────────┐  │
+  │  │ ••••••••                          │  │
+  │  └────────────────────────────────────┘  │
+  │                                          │
+  │  New Password                            │
+  │  ┌────────────────────────────────────┐  │
+  │  │ ••••••••                          │  │
+  │  └────────────────────────────────────┘  │
+  │                                          │
+  │  Confirm New Password                    │
+  │  ┌────────────────────────────────────┐  │
+  │  │ ••••••••                          │  │
+  │  └────────────────────────────────────┘  │
+  │                                          │
+  │  [Update Password]                       │
+  │                                          │
+  │  ─────────────────                       │
+  │                                          │
+  │  Two-Factor Authentication               │
+  │  ○ Not enabled                           │
+  │  [Enable 2FA] (coming soon)              │
+  └──────────────────────────────────────────┘
+
+  Password change: supabase.auth.updateUser({ password: newPassword })
+  Validation: passwords match, min 8 chars
+
+
+============================================================
+5. NOTIFICATIONS TAB
+============================================================
+
+  ┌──────────────────────────────────────────┐
+  │  Email Notifications                     │
+  │                                          │
+  │  ┌──────────────────────────────────┐   │
+  │  │ Campaign performance alerts  [●] │   │
+  │  │ Weekly digest report         [●] │   │
+  │  │ Budget threshold warnings    [○] │   │
+  │  │ New feature announcements    [●] │   │
+  │  │ A/B test results             [○] │   │
+  │  └──────────────────────────────────┘   │
+  │                                          │
+  │  [Save Preferences]                      │
+  └──────────────────────────────────────────┘
+
+  Toggle switches: custom or Tailwind-styled checkboxes
+  Stored as JSONB on profiles table:
+    profiles.notification_preferences = {
+      performance_alerts: true,
+      weekly_digest: true,
+      budget_warnings: false,
+      feature_announcements: true,
+      ab_test_results: false
+    }
+
+
+============================================================
+6. API KEYS TAB
+============================================================
+
+  ┌──────────────────────────────────────────┐
+  │  API Keys                                │
+  │  Manage your Veltrix API access keys.    │
+  │                                          │
+  │  Gemini API Key                          │
+  │  ┌────────────────────────────────────┐  │
+  │  │ AIzaSy••••••••••••••  [Show/Hide] │  │
+  │  └────────────────────────────────────┘  │
+  │  Used for AI copy & image generation.    │
+  │  Set in environment variables.           │
+  │                                          │
+  │  ─────────────────                       │
+  │                                          │
+  │  Veltrix API Keys (for programmatic      │
+  │  access)                                 │
+  │                                          │
+  │  [+ Generate New Key]                    │
+  │                                          │
+  │  ┌──────────────────────────────────┐   │
+  │  │ Name    Key         Created Rev  │   │
+  │  │ Prod    vx_••••sk   Jun 15  [×]  │   │
+  │  │ Dev     vx_••••dv   Jun 20  [×]  │   │
+  │  └──────────────────────────────────┘   │
+  └──────────────────────────────────────────┘
+
+  For MVP: Display-only. Shows the Gemini key status.
+  The "Veltrix API Keys" section is placeholder UI for future.
+
+
+============================================================
+7. COMPONENT STRUCTURE
+============================================================
+
+Settings.tsx is a single page with tab state:
+
+  const [activeTab, setActiveTab] = useState("profile");
+
+  return (
+    <div>
+      <TabBar tabs={["profile", "billing", "security", "notifications", "api-keys"]} />
+      
+      {activeTab === "profile" && <ProfileSettings />}
+      {activeTab === "billing" && <BillingSettings />}
+      {activeTab === "security" && <SecuritySettings />}
+      {activeTab === "notifications" && <NotificationSettings />}
+      {activeTab === "api-keys" && <APIKeySettings />}
+    </div>
+  );
+
+Each tab section can be a local component within Settings.tsx
+or extracted to separate files if they get large.
