@@ -1,19 +1,33 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
+import { supabase } from "../lib/supabase";
 import logoSvg from "../assets/Veltrix logo.svg";
 
 export default function Login() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
+    setError(null);
+    
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (signInError) {
+      setError(signInError.message);
       setLoading(false);
-      navigate("/");
-    }, 1500);
+    } else {
+      setLoading(false);
+      navigate("/dashboard");
+    }
   };
 
   return (
@@ -93,12 +107,20 @@ export default function Login() {
             </p>
           </div>
 
+          {error && (
+            <div className="mb-6 p-3 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-sm font-body">
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="flex flex-col gap-5 group">
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-body font-semibold text-slate-600">Email address</label>
               <input
                 type="email"
                 required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@company.com"
                 className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-body text-slate-900 placeholder-slate-400 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 transition-all hover:border-slate-300"
               />
@@ -114,6 +136,8 @@ export default function Login() {
               <input
                 type="password"
                 required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-body text-slate-900 placeholder-slate-400 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 transition-all hover:border-slate-300"
               />

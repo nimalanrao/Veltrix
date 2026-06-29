@@ -2,11 +2,13 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Sparkles, Building2, User, Mail, Lock, MapPin } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { supabase } from "../lib/supabase";
 import logoSvg from "../assets/Veltrix logo.svg";
 
 export default function Register() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   // Form Data
@@ -23,16 +25,30 @@ export default function Register() {
 
   const totalSteps = 5;
 
-  const handleNext = (e: React.FormEvent) => {
+  const handleNext = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     if (step < totalSteps) {
       setStep(step + 1);
     } else {
       setLoading(true);
-      setTimeout(() => {
+      const { error: signUpError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            name: formData.name,
+          }
+        }
+      });
+      
+      if (signUpError) {
+        setError(signUpError.message);
         setLoading(false);
-        navigate("/login");
-      }, 2000);
+      } else {
+        setLoading(false);
+        navigate("/dashboard");
+      }
     }
   };
 
@@ -132,6 +148,12 @@ export default function Register() {
             </p>
           </div>
 
+          {error && (
+            <div className="mb-6 p-3 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-sm font-body">
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleNext} className="group relative min-h-[160px]">
             <AnimatePresence mode="wait">
               {/* STEP 1 */}
@@ -150,7 +172,7 @@ export default function Register() {
                       type="text"
                       required
                       autoFocus
-                      placeholder="e.g. Nimalan Rao"
+                      placeholder="e.g. Nithyanantha"
                       value={formData.name}
                       onChange={(e) => updateForm("name", e.target.value)}
                       className="w-full bg-white border border-slate-200 rounded-xl pl-12 pr-4 py-3.5 text-sm font-body text-slate-900 placeholder-slate-400 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all hover:border-slate-300 shadow-sm"
@@ -175,7 +197,7 @@ export default function Register() {
                       type="email"
                       required
                       autoFocus
-                      placeholder="nimalan@example.com"
+                      placeholder="nithya@example.com"
                       value={formData.email}
                       onChange={(e) => updateForm("email", e.target.value)}
                       className="w-full bg-white border border-slate-200 rounded-xl pl-12 pr-4 py-3.5 text-sm font-body text-slate-900 placeholder-slate-400 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 transition-all hover:border-slate-300 shadow-sm"
