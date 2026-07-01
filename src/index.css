@@ -20,6 +20,7 @@
   html, body, #root {
     min-height: 100vh;
     width: 100%;
+    scroll-behavior: smooth;
     background-color: #ffffff;
     scrollbar-width: none; /* Hide scrollbar for Firefox */
     -ms-overflow-style: none; /* Hide scrollbar for IE and Edge */
@@ -69,5 +70,37 @@
 
   .liquid-glass-strong::before {
     display: none;
+  }
+}
+
+/* Notion-Style UI Polish (Emil Kowalski Design Philosophy) */
+:root {
+  --ease-out-notion: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+button,
+a,
+select,
+input[type="checkbox"],
+input[type="radio"],
+[role="button"],
+.cursor-pointer {
+  transition: transform 120ms var(--ease-out-notion), opacity 120ms var(--ease-out-notion), background-color 120ms var(--ease-out-notion), border-color 120ms var(--ease-out-notion), box-shadow 120ms var(--ease-out-notion) !important;
+}
+
+button:active,
+a:active,
+select:active,
+[role="button"]:active,
+.cursor-pointer:active {
+  transform: scale(0.97) !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button:hover,
+  a:hover,
+  [role="button"]:hover,
+  .cursor-pointer:hover {
+    filter: brightness(0.98);
   }
 }

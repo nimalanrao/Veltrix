@@ -4,9 +4,19 @@ import { Plus, Minus } from "lucide-react";
 
 const faqs = [
   {
+    question: "How is Veltrix different from general AI tools like ChatGPT, Claude, or Gemini?",
+    answer:
+      "ChatGPT, Claude, and Gemini are general-purpose AI assistants with no built-in knowledge of your brand. Veltrix is built specifically for marketing. Our agent workspace embeds your brand voice, style guidelines, and audience profiles directly into every output automatically. We also orchestrate multi-channel campaign content pipelines to launch copy directly into active channels.",
+  },
+  {
+    question: "Can Veltrix keep my brand voice consistent?",
+    answer:
+      "Yes. In Settings, you can specify your brand voice directives and tone parameters. Our specialized copywriting agents refer to these instructions on every run, ensuring that generated Meta copy, Google ads, and newsletters feel unified and on-brand.",
+  },
+  {
     question: "Do I need to connect my live advertising accounts to test Veltrix?",
     answer:
-      "No. You can write, edit, and run predictive performance diagnostics on your campaigns entirely within the Veltrix Studio Playground without connecting any external channels.",
+      "No. You can write, edit, and generate copy variations entirely within the Veltrix Studio Playground without connecting any live advertising systems.",
   },
   {
     question: "Which marketing networks and social channels are supported?",
@@ -14,24 +24,9 @@ const faqs = [
       "Veltrix currently integrates with Meta Ads (Facebook & Instagram), Google Search Ads, X (Twitter) organic, and standard SMTP or CRM-based email systems (such as Mailchimp or Klaviyo).",
   },
   {
-    question: "How do the AI performance predictions work?",
+    question: "How does the autonomous bid optimization agent work?",
     answer:
-      "Our models are trained on millions of historical multi-channel ad cycles. When you input campaign details, Veltrix simulates performance and predicts Click-Through Rates (CTR) and Cost Per Acquisition (CPA) with up to 92% accuracy.",
-  },
-  {
-    question: "Can I approve or customize copy variations before they deploy?",
-    answer:
-      'Absolutely. While Veltrix can run in fully autonomous mode (creating and adjusting variations in the background), you can switch to "Review First" mode to verify and manually edit copies before they are pushed live.',
-  },
-  {
-    question: "How does autonomous bid optimization work?",
-    answer:
-      "Once linked to your Meta or Google Ads accounts, Veltrix monitors real-time performance. It runs minor A/B copy tests and dynamically shifts your budget to the highest-performing ad variations to maximize ROAS.",
-  },
-  {
-    question: "Can I cancel my subscription or change plans?",
-    answer:
-      "Yes. Billing is subscription-based (monthly or annual). You can upgrade, downgrade, or cancel your plan at any time directly from your dashboard. Annual plans come with a 14-day money-back guarantee.",
+      "Once linked to your Meta or Google Ads accounts, Veltrix's performance agent monitors your live metrics 24/7. It runs minor A/B copy tests and dynamically shifts budgets to the highest-performing ad variations to maximize overall ROAS.",
   },
 ];
 
@@ -104,7 +99,7 @@ function FAQItem({ faq, index }: { faq: (typeof faqs)[0]; index: number }) {
 
 export default function FAQ() {
   return (
-    <section id="faq" className="relative py-20 md:py-28 px-6 lg:px-10 bg-white">
+    <section id="faq" className="relative py-20 md:py-28 px-8 md:px-12 bg-white">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <motion.div 

@@ -22,27 +22,49 @@ export default function Analytics() {
 
   const loading = campaignsLoading || metricsLoading;
 
-  const campaignSummaries: CampaignSummary[] = campaigns.map((c) => {
-    const isActive = c.status === "active";
+  const campaignSummaries: CampaignSummary[] = campaigns.map((c: any) => {
+    const metrics = c.campaign_metrics || [];
+    // Filter metrics by selected periodDays if needed
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - period);
+    const filteredMetrics = metrics.filter((m: any) => new Date(m.date) >= startDate);
+
+    const totalSpend = filteredMetrics.reduce((sum: number, m: any) => sum + Number(m.spend || 0), 0);
+    const totalRevenue = filteredMetrics.reduce((sum: number, m: any) => sum + Number(m.revenue || 0), 0);
+    const roas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
+
     return {
       name: c.name,
       channel: c.channel,
-      spend: isActive ? Number(c.daily_budget || 0) * period : 0,
-      revenue: isActive ? Number(c.daily_budget || 0) * period * 4.2 : 0,
+      spend: totalSpend,
+      revenue: totalRevenue,
       ctr: c.predicted_ctr || 2.5,
       cpa: c.predicted_cpa || 5.0,
-      roas: isActive ? 4.2 : 0,
+      roas: roas,
       status: c.status,
     };
   });
 
-  // ROAS calculations per channel
+  // Calculate dynamic ROAS per channel from daily metrics
+  const campaignChannels = new Map(campaigns.map((c) => [c.id, c.channel]));
+  const channelTotals = new Map<string, { spend: number; revenue: number }>();
+  
+  dailyMetrics.forEach((m) => {
+    const channel = campaignChannels.get(m.campaign_id) || "google";
+    const current = channelTotals.get(channel) || { spend: 0, revenue: 0 };
+    channelTotals.set(channel, {
+      spend: current.spend + Number(m.spend || 0),
+      revenue: current.revenue + Number(m.revenue || 0),
+    });
+  });
+
   const getChannelROAS = (channel: string) => {
-    if (channel === "meta") return 4.2;
-    if (channel === "google") return 3.8;
-    if (channel === "email") return 2.1;
-    return 1.4; // x
+    const totals = channelTotals.get(channel);
+    if (!totals || totals.spend === 0) return 0;
+    return totals.revenue / totals.spend;
   };
+
+  const maxRoas = Math.max(...["meta", "google", "email", "x"].map((ch) => getChannelROAS(ch)), 1);
 
   const getChannelColor = (channel: string) => {
     if (channel === "meta") return "bg-blue-600";
@@ -122,12 +144,12 @@ export default function Analytics() {
           <div className="flex flex-col gap-5.5">
             {["meta", "google", "email", "x"].map((ch) => {
               const roas = getChannelROAS(ch);
-              const percentage = (roas / 5.2) * 100; // relative to maximum
+              const percentage = maxRoas > 0 ? (roas / maxRoas) * 100 : 0;
               return (
                 <div key={ch} className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between text-xs font-body font-semibold">
                     <span className="capitalize text-slate-800">{ch}</span>
-                    <span className="text-slate-900 font-bold">{roas}x ROAS</span>
+                    <span className="text-slate-900 font-bold">{roas.toFixed(1)}x ROAS</span>
                   </div>
                   <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                     <div

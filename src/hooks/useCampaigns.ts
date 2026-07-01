@@ -33,6 +33,7 @@ export interface Campaign {
   predicted_cpa: number | null;
   created_at: string;
   updated_at: string;
+  roas?: number | null;
 }
 
 export function useCampaigns() {
@@ -45,11 +46,21 @@ export function useCampaigns() {
     try {
       const { data, error } = await supabase
         .from("campaigns")
-        .select("*")
+        .select("*, campaign_metrics(spend, revenue)")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       if (!error && data) {
-        setCampaigns(data);
+        const campaignsWithRoas = data.map((c: any) => {
+          const metrics = c.campaign_metrics || [];
+          const totalSpend = metrics.reduce((sum: number, m: any) => sum + Number(m.spend || 0), 0);
+          const totalRevenue = metrics.reduce((sum: number, m: any) => sum + Number(m.revenue || 0), 0);
+          const roas = totalSpend > 0 ? totalRevenue / totalSpend : null;
+          return {
+            ...c,
+            roas
+          };
+        });
+        setCampaigns(campaignsWithRoas);
       }
     } catch (err) {
       console.error("Error fetching campaigns:", err);

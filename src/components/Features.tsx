@@ -1,6 +1,6 @@
-import { useRef } from "react";
-import { motion, useScroll, useTransform } from "motion/react";
-import { Brain, Zap, BarChart3, Layers, Rocket } from "lucide-react";
+import { useRef, useState } from "react";
+import { motion } from "motion/react";
+import { Brain, Zap, BarChart3, Layers, Rocket, TrendingUp } from "lucide-react";
 
 const features = [
   {
@@ -38,87 +38,153 @@ const features = [
       "Our predictive bid models monitor campaigns 24/7. Run autonomous A/B copy tests and dynamically adjust budgets to target the lowest cost-per-acquisition (CPA) and highest ROAS.",
     tags: ["A/B Testing", "ROAS Optimization", "Real-time Analytics"],
   },
+  {
+    icon: TrendingUp,
+    title: "Attribution & Scaling",
+    description:
+      "Veltrix automatically tracks conversions back to specific creative parameter pairs. It scales the highest-ROI segments while systematically cutting waste.",
+    tags: ["ROAS Scaling", "Attribution", "Efficiency"],
+  },
 ];
 
 function FeatureCard({ feature }: { feature: (typeof features)[0] }) {
   const Icon = feature.icon;
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [rotateX, setRotateX] = useState(0);
+  const [rotateY, setRotateY] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const card = cardRef.current;
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    const mouseX = e.clientX - rect.left - width / 2;
+    const mouseY = e.clientY - rect.top - height / 2;
+    // Max rotation 12deg for a premium subtle feel
+    const rX = -(mouseY / height) * 12;
+    const rY = (mouseX / width) * 12;
+    setRotateX(rX);
+    setRotateY(rY);
+  };
+
+  const handleMouseLeave = () => {
+    setRotateX(0);
+    setRotateY(0);
+    setIsHovered(false);
+  };
 
   return (
-    <motion.div
-      className="w-[85vw] sm:w-[380px] md:w-[420px] shrink-0 liquid-glass bg-white/70 border border-slate-100 rounded-2xl p-6 md:p-8 flex flex-col gap-4 group cursor-default"
-      whileHover={{ y: -8, scale: 1.02, boxShadow: "0 20px 40px -15px rgba(0,0,0,0.05)" }}
-      transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+    <div
+      ref={cardRef}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={handleMouseLeave}
+      className="w-full shrink-0 p-[1px] rounded-3xl transition-shadow duration-300 z-10"
+      style={{
+        perspective: "1000px",
+        boxShadow: isHovered 
+          ? "0 30px 60px -15px rgba(15, 23, 42, 0.08)" 
+          : "0 15px 30px -10px rgba(0, 0, 0, 0.04)",
+      }}
     >
-      <div className="flex items-center gap-3">
-        <motion.div 
-          className="w-10 h-10 rounded-xl bg-slate-900/5 flex items-center justify-center origin-center shrink-0"
-          whileHover={{ rotate: 5, scale: 1.1 }}
-          transition={{ type: "spring", stiffness: 400, damping: 10 }}
+      <motion.div
+        className="w-full h-full bg-white border border-[#eae8e4] rounded-3xl p-6 md:p-8 flex flex-col gap-5 cursor-default relative overflow-hidden"
+        style={{
+          transformStyle: "preserve-3d",
+          transform: `rotateX(${rotateX}deg) rotateY(${rotateY}deg)`,
+          transition: "transform 150ms ease-out",
+        }}
+      >
+        {/* Icon & Title with Parallax */}
+        <div className="flex items-center gap-4" style={{ transform: "translateZ(30px)" }}>
+          <div className="w-12 h-12 rounded-2xl bg-slate-900/5 border border-slate-900/5 flex items-center justify-center shrink-0">
+            <Icon className="h-6 w-6 text-slate-800" />
+          </div>
+          <h3 className="text-xl font-heading italic text-slate-950 leading-tight">
+            {feature.title}
+          </h3>
+        </div>
+
+        {/* Description with Parallax */}
+        <p 
+          className="text-sm text-slate-600 font-body font-light leading-relaxed flex-1"
+          style={{ transform: "translateZ(20px)" }}
         >
-          <Icon className="h-5 w-5 text-slate-800" />
-        </motion.div>
-        <h3 className="text-lg font-body font-semibold text-slate-900 leading-tight">
-          {feature.title}
-        </h3>
-      </div>
+          {feature.description}
+        </p>
 
-      <p className="text-sm text-slate-500 font-body font-light leading-relaxed flex-1">
-        {feature.description}
-      </p>
-
-      <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-100">
-        {feature.tags.map((tag) => (
-          <span
-            key={tag}
-            className="text-[10px] font-body font-semibold text-slate-600 bg-slate-900/5 rounded-full px-2.5 py-1 transition-colors group-hover:bg-slate-900/10"
-          >
-            {tag}
-          </span>
-        ))}
-      </div>
-    </motion.div>
+        {/* Tags with Parallax */}
+        <div 
+          className="flex flex-wrap gap-2 pt-5 border-t border-slate-100"
+          style={{ transform: "translateZ(15px)" }}
+        >
+          {feature.tags.map((tag) => (
+            <span
+              key={tag}
+              className="text-[10px] font-body font-semibold text-slate-700 bg-slate-900/5 border border-slate-900/5 rounded-full px-3 py-1"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      </motion.div>
+    </div>
   );
 }
 
 export default function Features() {
-  const targetRef = useRef<HTMLDivElement>(null);
-  
-  // Create a scroll-based horizontal translation
-  const { scrollYProgress } = useScroll({
-    target: targetRef,
-  });
-
-  // Maps scroll progress 0 -> 1 to x transform.
-  // We move the container to the left by a percentage of its own width.
-  const x = useTransform(scrollYProgress, [0, 1], ["0%", "-62%"]);
-
   return (
-    <section id="features" ref={targetRef} className="relative h-[600vh] bg-white">
-      {/* Sticky container stays in viewport for 600vh of scrolling */}
-      <div className="sticky top-0 h-screen flex flex-col items-center justify-center overflow-hidden pt-12 md:pt-0">
-        
+    <section id="features" className="relative py-24 bg-[#fcfcfb] overflow-hidden border-t border-[#eae8e4]">
+      {/* Floating Ambient Depth Blobs */}
+      <motion.div
+        animate={{
+          x: [0, 80, -40, 0],
+          y: [0, -60, 40, 0],
+          scale: [1, 1.1, 0.95, 1],
+        }}
+        transition={{
+          duration: 20,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
+        className="absolute top-1/4 left-[10%] w-96 h-96 bg-purple-500/5 rounded-full blur-[140px] pointer-events-none z-0"
+      />
+      <motion.div
+        animate={{
+          x: [0, -50, 60, 0],
+          y: [0, 80, -30, 0],
+          scale: [1, 0.9, 1.05, 1],
+        }}
+        transition={{
+          duration: 25,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
+        className="absolute bottom-1/4 right-[10%] w-96 h-96 bg-blue-500/5 rounded-full blur-[140px] pointer-events-none z-0"
+      />
+
+      <div className="max-w-5xl mx-auto px-8 md:px-12 relative z-10">
         {/* Section Header */}
-        <div className="text-center mb-10 max-w-2xl mx-auto px-6 shrink-0">
-          <span className="inline-block bg-slate-100 border border-slate-200/60 rounded-full px-4 py-1.5 text-xs font-body font-semibold text-slate-600 mb-4">
+        <div className="text-center mb-16 max-w-2xl mx-auto">
+          <span className="inline-block bg-slate-100 border border-slate-200 rounded-full px-4 py-1.5 text-xs font-body font-semibold text-slate-600 mb-4 backdrop-blur-md">
             Workflow
           </span>
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-heading italic text-slate-950 leading-tight tracking-tight">
+          <h2 className="text-4xl sm:text-5xl md:text-6xl font-heading italic text-slate-950 leading-tight tracking-tight">
             Autonomous Campaign Lifecycle
           </h2>
-          <p className="mt-4 text-sm md:text-base text-slate-500 font-body font-light">
+          <p className="mt-4 text-sm md:text-base text-slate-600 font-body font-light max-w-xl mx-auto">
             From initial audience insights to 24/7 bidding optimization, Veltrix manages your entire campaign lifecycle autonomously.
           </p>
         </div>
 
-        {/* Horizontal Scrolling Track */}
-        <div className="w-full overflow-hidden flex items-center shrink-0 py-10">
-          <motion.div style={{ x }} className="flex gap-6 md:gap-8 px-4 md:px-8 w-max">
-            {features.map((f) => (
-              <FeatureCard key={f.title} feature={f} />
-            ))}
-          </motion.div>
+        {/* Feature Grid Layout */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 justify-center">
+          {features.map((f) => (
+            <FeatureCard key={f.title} feature={f} />
+          ))}
         </div>
-
       </div>
     </section>
   );

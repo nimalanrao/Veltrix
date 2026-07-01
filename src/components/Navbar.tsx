@@ -24,6 +24,18 @@ export default function Navbar() {
     return () => { document.body.style.overflow = ""; };
   }, [open]);
 
+  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (href.startsWith("#")) {
+      e.preventDefault();
+      const targetId = href.slice(1);
+      const elem = document.getElementById(targetId);
+      if (elem) {
+        elem.scrollIntoView({ behavior: "smooth" });
+      }
+      setOpen(false);
+    }
+  };
+
   return (
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all ${
@@ -31,9 +43,14 @@ export default function Navbar() {
       }`}
       style={{ transition: "padding 300ms cubic-bezier(0.23,1,0.32,1)" }}
     >
-      <div className="mx-auto max-w-7xl px-6 lg:px-10 flex items-center justify-between">
+      <div className="mx-auto max-w-5xl px-8 md:px-12 flex items-center justify-between">
         {/* Logo Icon */}
-        <a href="#hero" className="flex items-center group w-12 shrink-0" aria-label="Veltrix Home">
+        <a 
+          href="#hero" 
+          onClick={(e) => handleNavClick(e, "#hero")}
+          className="flex items-center group w-12 shrink-0" 
+          aria-label="Veltrix Home"
+        >
           <img
             src={logoSvg}
             alt=""
@@ -51,6 +68,7 @@ export default function Navbar() {
             <a
               key={l.label}
               href={l.href}
+              onClick={(e) => handleNavClick(e, l.href)}
               className={`px-3 py-1.5 text-sm font-body font-semibold transition-colors duration-150 ${
                 scrolled ? "text-slate-600 hover:text-slate-950" : "text-white/80 hover:text-white"
               }`}
@@ -106,11 +124,11 @@ export default function Navbar() {
             <a
               key={l.label}
               href={l.href}
+              onClick={(e) => handleNavClick(e, l.href)}
               className={`text-3xl font-body font-light text-slate-800 ${
                 open ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0"
               }`}
               style={{ transition: `transform 400ms cubic-bezier(0.23,1,0.32,1) ${100 + i * 60}ms, opacity 400ms ease ${100 + i * 60}ms` }}
-              onClick={() => setOpen(false)}
             >
               {l.label}
             </a>

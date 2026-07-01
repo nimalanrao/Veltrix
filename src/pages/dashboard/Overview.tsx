@@ -47,11 +47,69 @@ export default function Overview() {
   });
 
   // Extract sparkline points from daily metrics
-  const getMetricSparkline = (key: "spend" | "conversions" | "clicks" | "impressions") => {
-    if (dailyMetrics.length < 2) return [1, 2, 3, 4, 5, 6, 7];
+  const getMetricSparkline = (key: "spend" | "conversions" | "clicks" | "impressions" | "roas") => {
+    if (dailyMetrics.length < 2) return [];
     // Take the last 7 entries
-    return dailyMetrics.slice(-7).map((m) => Number(m[key] || 0));
+    return dailyMetrics.slice(-7).map((m) => {
+      if (key === "roas") {
+        return Number(m.spend || 0) > 0 ? Number(m.revenue || 0) / Number(m.spend || 0) : 0;
+      }
+      return Number(m[key] || 0);
+    });
   };
+
+  // Calculate trends comparing last 7 days vs previous 7 days
+  const calculateTrend = (key: "spend" | "conversions" | "roas") => {
+    if (dailyMetrics.length < 14) return undefined;
+    
+    const latest7 = dailyMetrics.slice(-7);
+    const prev7 = dailyMetrics.slice(-14, -7);
+    
+    if (key === "spend") {
+      const latestSum = latest7.reduce((sum, m) => sum + Number(m.spend || 0), 0);
+      const prevSum = prev7.reduce((sum, m) => sum + Number(m.spend || 0), 0);
+      if (prevSum === 0) return undefined;
+      const diff = ((latestSum - prevSum) / prevSum) * 100;
+      return {
+        text: `${diff >= 0 ? "+" : ""}${diff.toFixed(0)}% vs last week`,
+        direction: diff >= 0 ? ("up" as const) : ("down" as const)
+      };
+    }
+    
+    if (key === "conversions") {
+      const latestSum = latest7.reduce((sum, m) => sum + (m.conversions || 0), 0);
+      const prevSum = prev7.reduce((sum, m) => sum + (m.conversions || 0), 0);
+      if (prevSum === 0) return undefined;
+      const diff = ((latestSum - prevSum) / prevSum) * 100;
+      return {
+        text: `${diff >= 0 ? "+" : ""}${diff.toFixed(0)}% vs last week`,
+        direction: diff >= 0 ? ("up" as const) : ("down" as const)
+      };
+    }
+    
+    if (key === "roas") {
+      const latestSpend = latest7.reduce((sum, m) => sum + Number(m.spend || 0), 0);
+      const latestRevenue = latest7.reduce((sum, m) => sum + Number(m.revenue || 0), 0);
+      const prevSpend = prev7.reduce((sum, m) => sum + Number(m.spend || 0), 0);
+      const prevRevenue = prev7.reduce((sum, m) => sum + Number(m.revenue || 0), 0);
+      
+      const latestROAS = latestSpend > 0 ? latestRevenue / latestSpend : 0;
+      const prevROAS = prevSpend > 0 ? prevRevenue / prevSpend : 0;
+      
+      if (prevROAS === 0) return undefined;
+      const diff = ((latestROAS - prevROAS) / prevROAS) * 100;
+      return {
+        text: `${diff >= 0 ? "+" : ""}${diff.toFixed(0)}% vs last week`,
+        direction: diff >= 0 ? ("up" as const) : ("down" as const)
+      };
+    }
+    
+    return undefined;
+  };
+
+  const spendTrend = calculateTrend("spend");
+  const convTrend = calculateTrend("conversions");
+  const roasTrend = calculateTrend("roas");
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
@@ -97,34 +155,31 @@ export default function Overview() {
             <StatCard
               label="Active Campaigns"
               value={activeCount}
-              trend="+14% vs last week"
-              trendDirection="up"
               icon={Activity}
-              sparkline={[2, 3, 3, 2, 4, 3, 4]}
             />
             <StatCard
               label="Total Ad Spend"
               value={totalSpend}
-              trend="-2% vs last week"
-              trendDirection="down"
+              trend={spendTrend?.text}
+              trendDirection={spendTrend?.direction}
               icon={DollarSign}
               sparkline={getMetricSparkline("spend")}
             />
             <StatCard
               label="Conversions"
               value={totalConversions}
-              trend="+23% vs last week"
-              trendDirection="up"
+              trend={convTrend?.text}
+              trendDirection={convTrend?.direction}
               icon={Target}
               sparkline={getMetricSparkline("conversions")}
             />
             <StatCard
               label="Average ROAS"
               value={avgROAS}
-              trend="+8% vs last week"
-              trendDirection="up"
+              trend={roasTrend?.text}
+              trendDirection={roasTrend?.direction}
               icon={TrendingUp}
-              sparkline={[3.8, 3.9, 4.1, 4.0, 4.3, 4.1, 4.2]}
+              sparkline={getMetricSparkline("roas")}
             />
           </>
         )}

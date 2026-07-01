@@ -63,8 +63,8 @@ export default function Playground() {
   const selectedChannel = channels.find((c) => c.id === channel);
 
   return (
-    <section id="playground" className="relative py-24 md:py-32 px-6 lg:px-10 bg-slate-50/30">
-      <div className="max-w-6xl mx-auto">
+    <section id="playground" className="relative py-24 md:py-32 px-8 md:px-12 bg-slate-50/30">
+      <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="text-center mb-14 max-w-2xl mx-auto">
           <span className="inline-block bg-slate-100 border border-slate-200/60 rounded-full px-4 py-1.5 text-xs font-body font-semibold text-slate-600 mb-4">

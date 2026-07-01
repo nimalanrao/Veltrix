@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { supabase } from "../lib/supabase";
@@ -9,7 +9,16 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const savedEmail = localStorage.getItem("remember_email");
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,6 +34,11 @@ export default function Login() {
       setError(signInError.message);
       setLoading(false);
     } else {
+      if (rememberMe) {
+        localStorage.setItem("remember_email", email);
+      } else {
+        localStorage.removeItem("remember_email");
+      }
       setLoading(false);
       navigate("/dashboard");
     }
@@ -141,6 +155,18 @@ export default function Login() {
                 placeholder="••••••••"
                 className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-body text-slate-900 placeholder-slate-400 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 transition-all hover:border-slate-300"
               />
+            </div>
+
+            <div className="flex items-center justify-start mt-1">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="rounded border-slate-200 text-slate-900 focus:ring-slate-900 h-3.5 w-3.5 cursor-pointer"
+                />
+                <span className="text-xs font-body text-slate-500 font-medium">Remember me</span>
+              </label>
             </div>
 
             <button

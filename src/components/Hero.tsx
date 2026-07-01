@@ -10,25 +10,26 @@ export default function Hero() {
   };
 
   return (
-    <section id="hero" className="relative min-h-screen flex flex-col justify-between px-6 lg:px-10 overflow-hidden bg-[#060609]">
-      {/* Background Video */}
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        preload="auto"
-        poster="/images/hero_bg.jpeg"
-        className="absolute inset-0 w-full h-full object-cover z-0"
-      >
-        <source
-          src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260306_115329_5e00c9c5-4d69-49b7-94c3-9c31c60bb644.mp4"
-          type="video/mp4"
-        />
-      </video>
-
+    <section id="hero" className="relative min-h-screen flex flex-col justify-between px-6 lg:px-10 overflow-hidden bg-transparent">
+      {/* Background Video with 100% opacity */}
+      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none opacity-100">
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="auto"
+          poster="/images/hero_bg.jpeg"
+          className="absolute inset-0 w-full h-full object-cover opacity-100"
+        >
+          <source
+            src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260306_115329_5e00c9c5-4d69-49b7-94c3-9c31c60bb644.mp4"
+            type="video/mp4"
+          />
+        </video>
+      </div>
       {/* Center Content */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center pt-24 pb-20 max-w-4xl mx-auto">
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center pt-24 pb-20 max-w-3xl mx-auto px-8 md:px-12">
         {/* Badge */}
         <motion.div
           className="mb-4"
@@ -91,7 +92,7 @@ export default function Hero() {
 
       {/* Bottom Bar — Centered Elements */}
       <motion.div
-        className="relative z-10 flex flex-col items-center justify-center gap-6 pb-8 max-w-7xl mx-auto w-full border-t border-white/10 pt-6"
+        className="relative z-10 flex flex-col items-center justify-center gap-6 pb-8 max-w-5xl mx-auto w-full border-t border-white/10 pt-6 px-8 md:px-12"
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 1.3 }}

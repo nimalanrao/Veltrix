@@ -194,7 +194,7 @@ export default function CampaignCard({
           </div>
           <div className="text-center">
             <span className="text-sm font-heading italic text-slate-800 leading-none">
-              {campaign.status === "active" ? "4.2x" : "—"}
+              {campaign.roas ? `${Number(campaign.roas).toFixed(1)}x` : "—"}
             </span>
             <span className="text-[9px] font-body font-bold text-slate-400 uppercase tracking-wider block mt-1 leading-none">
               ROAS
